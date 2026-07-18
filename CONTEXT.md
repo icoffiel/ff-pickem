@@ -19,15 +19,19 @@ The link between a User and a League — the "user-in-a-league." Carries the per
 _Avoid_: Player, participant, member record
 
 **Commissioner**:
-The Membership that created the League. Exactly one per League. A role on the Membership, not a pointer on the League.
+The Membership that created the League. Exactly one per League. A role on the Membership, not a pointer on the League. The Commissioner holds the League's admin powers: [result overrides](#play--scoring), removing a member, revoking a pending Invite, and editing the League name.
 _Avoid_: Admin, owner, organizer
+
+**Removed member**:
+A Membership the Commissioner has taken out of the League. Removal is **go-forward** and reversible: the member keeps every week that had already locked when they were removed — completed weeks, and who won them, are never rewritten — and stops competing thereafter. On the season Standings they stay visible, marked **"left,"** with a frozen total, ineligible for the title. Nothing is deleted; un-removing restores them fully.
+_Avoid_: Deleted member, banned, kicked
 
 **Team name**:
 The display name a person chooses for themselves within one League, captured when they join. Lives only on the Membership; there is no global user name.
 _Avoid_: Username, handle, nickname
 
 **Invite**:
-An app-level grant that lets a specific email join a specific League. Has its own token and 14-day expiry, independent of auth. At most one live (pending) invite per (email, league); re-inviting supersedes the previous one. An invite grants membership, not a role — every invited person joins as an ordinary member.
+An app-level grant that lets a specific email join a specific League. Has its own token and 14-day expiry, independent of auth. At most one live (pending) invite per (email, league); re-inviting supersedes the previous one. The Commissioner may **revoke** a still-pending Invite, cancelling it (a terminal state, distinct from time-based expiry and re-invite supersession). An invite grants membership, not a role — every invited person joins as an ordinary member.
 _Avoid_: Magic link (that is the auth mechanism, not the grant)
 
 ### Play & scoring

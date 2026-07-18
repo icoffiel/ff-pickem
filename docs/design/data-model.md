@@ -24,11 +24,11 @@ One season's competition. The 8-setting **RuleSet** ([#5](https://github.com/ico
 
 ### `memberships`
 
-The user-in-a-league link. `role` (`"commissioner" | "member"`) is the single source of truth for authority — the league stores no commissioner pointer. The creator is born `commissioner` in `createLeague`; everyone else is born `member` at invite redemption. `teamName` is per-league identity.
+The user-in-a-league link. `role` (`"commissioner" | "member"`) is the single source of truth for authority — the league stores no commissioner pointer. The creator is born `commissioner` in `createLeague`; everyone else is born `member` at invite redemption. `teamName` is per-league identity. **`status`** (`"active" | "removed"`) + **`removedAt`** support the commissioner's go-forward member removal ([#12](https://github.com/icoffiel/ff-pickem/issues/12)): removal is a **soft** flag, never a delete, so a removed member's picks stay as inert rows and completed weeks are preserved. The standings walk counts a removed member in every week that locked **before** `removedAt` and drops them afterward; the pick/tiebreaker mutations reject a `removed` membership; un-remove clears the flag. Full semantics in [`admin-powers.md`](./admin-powers.md).
 
 ### `invites`
 
-An app-level grant ([#6](https://github.com/icoffiel/ff-pickem/issues/6)), separate from auth. Carries no role (every invite makes a `member`) and no team name (captured onto the membership at redemption). The invariant **one live `pending` invite per (email, league)** is enforced in the mutation via `by_league_email`, not structurally (Convex has no partial-unique constraint).
+An app-level grant ([#6](https://github.com/icoffiel/ff-pickem/issues/6)), separate from auth. Carries no role (every invite makes a `member`) and no team name (captured onto the membership at redemption). The invariant **one live `pending` invite per (email, league)** is enforced in the mutation via `by_league_email`, not structurally (Convex has no partial-unique constraint). `status` includes **`revoked`** — a terminal state the commissioner sets to cancel a still-pending invite ([#12](https://github.com/icoffiel/ff-pickem/issues/12)), distinct from time-based `expired` and re-invite `superseded`. Redemption of a `removed` member's `(user, league)` **reactivates the existing membership** rather than creating a duplicate.
 
 ### `games`
 
@@ -48,7 +48,7 @@ A commissioner's per-league correction to a game's result ([#10](https://github.
 
 ### Standings — no table
 
-Weekly and season standings are computed on read by a query that walks `picks.by_league_week`, loads the week's games **and the league's `resultOverrides`** into maps, derives each pick's result against the *effective outcome*, and folds. Season = Σ weekly correct picks; ties break by MNF-guess closeness (weekly, winner-only — no points change) or co-champions (season), per the rule-set. Scale is tiny (a league is a handful of people, ~272 REG games/season), so compute-on-read is cheap and always consistent; a materialized leaderboard is a later additive change if ever needed. Full algorithm and edge cases: [`weekly-loop.md`](./weekly-loop.md).
+Weekly and season standings are computed on read by a query that walks `picks.by_league_week`, loads the week's games **and the league's `resultOverrides`** into maps, derives each pick's result against the *effective outcome*, and folds. Season = Σ weekly correct picks; ties break by MNF-guess closeness (weekly, winner-only — no points change) or co-champions (season), per the rule-set. **Removed members** ([#12](https://github.com/icoffiel/ff-pickem/issues/12)) are folded for weeks that locked before their `removedAt` and dropped afterward, with a "left" marker and frozen total on the season board — so a removal never rewrites a decided week. Scale is tiny (a league is a handful of people, ~272 REG games/season), so compute-on-read is cheap and always consistent; a materialized leaderboard is a later additive change if ever needed. Full algorithm and edge cases: [`weekly-loop.md`](./weekly-loop.md).
 
 ## Schema (`convex/schema.ts`)
 
@@ -105,6 +105,10 @@ export default defineSchema({
     role: v.union(v.literal("commissioner"), v.literal("member")),
     teamName: v.string(),
     joinedAt: v.number(),
+    // Go-forward soft removal (#12). Removed members keep completed weeks;
+    // the standings walk includes them for weeks with lock < removedAt.
+    status: v.union(v.literal("active"), v.literal("removed")),
+    removedAt: v.optional(v.number()),
   })
     .index("by_league", ["leagueId"])
     .index("by_user", ["userId"])
@@ -119,6 +123,7 @@ export default defineSchema({
       v.literal("accepted"),
       v.literal("expired"),
       v.literal("superseded"),
+      v.literal("revoked"), // commissioner-cancelled while pending (#12)
     ),
     expiresAt: v.number(), // 14-day
     createdAt: v.number(),
@@ -198,5 +203,6 @@ export default defineSchema({
 
 - **Lock enforcement** lives in the pick / tiebreaker mutations: compute the week's lock time from the rule-set (default = the week's first counted game's kickoff) and reject writes once past it. No cron flips a flag.
 - **Grading collapses into sync**: updating `game.outcome` (or writing a `resultOverrides` row) is the whole job; there is no separate grading write, because `pick.result` is derived from the *effective outcome*.
-- **Uniqueness** (one pick per membership+game, one guess per membership+week, one live invite per email+league) is enforced in mutations via the corresponding index — Convex has no unique constraints.
+- **Uniqueness** (one pick per membership+game, one guess per membership+week, one live invite per email+league, one override per league+game) is enforced in mutations via the corresponding index — Convex has no unique constraints.
+- **Removed-member guards** ([#12](https://github.com/icoffiel/ff-pickem/issues/12)): the pick / tiebreaker mutations reject a `removed` membership; invite redemption reactivates an existing (removed) membership rather than creating a duplicate; only a `commissioner` membership may remove, and never itself.
 - **Validators to confirm at build** against the installed Convex + `@convex-dev/auth` versions (per the project's verify-the-API rule): the `authTables` import path and the `defineTable`/`v` surface used above.
