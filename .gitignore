@@ -16,6 +16,9 @@ convex/_generated
 .env
 .env*.local
 
+# vercel
+.vercel
+
 # testing
 /coverage
 

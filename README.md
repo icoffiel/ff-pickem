@@ -71,9 +71,11 @@ functions and pure derivations.
 M0 also provisions three external services. Code is service-agnostic; the
 accounts are set up by a human:
 
-- **Convex** — done automatically by `npx convex dev` (currently a **local**
-  beta deployment). A **cloud** deployment is needed before deploying to Vercel
-  (M0d) — run `npx convex deploy` / configure a cloud dev deployment then.
+- **Convex** — **done.** Local development still runs against the **local** beta
+  deployment written into `.env.local` by `npx convex dev`. A separate **cloud
+  production** deployment (`iain-coffield:ff-pickem:production`) backs the Vercel
+  deploy; it is the default target of `npx convex deploy` and is not selected
+  locally, so the two do not interfere.
 - **Resend** (M0a, issue #22) — **deferred: no sending domain owned yet.**
   Without a verified domain, Resend's shared `onboarding@resend.dev` sender
   returns a 403 for any recipient other than the Resend account holder's own
@@ -85,5 +87,19 @@ accounts are set up by a human:
   - **M2 (invites) is blocked**: inviting real league members means emailing
     other people, which needs a verified domain. Buy one and complete this
     issue before M2 — allow for DNS propagation lead time.
-- **Vercel Hobby** (M0d, issue #25) — create the project, connect the repo, set
-  `NEXT_PUBLIC_CONVEX_URL` + Convex env vars, deploy the skeleton.
+- **Vercel Hobby** (M0d, issue #25) — project `icoffiels-projects/ff-pickem`,
+  live at [ff-pickem.vercel.app](https://ff-pickem.vercel.app). No custom domain
+  (deferred to go-live).
+  - **Do not set `NEXT_PUBLIC_CONVEX_URL` in Vercel.** The build command in
+    [`vercel.json`](./vercel.json) is `npx convex deploy --cmd 'npm run build'`,
+    which sets that variable itself from the deploy key's target deployment,
+    then runs the Next.js build, then pushes backend code
+    ([Convex hosting docs](https://docs.convex.dev/production/hosting/vercel)).
+    Hard-coding the URL would pin the build to a stale deployment.
+  - The **only** variable configured in Vercel is `CONVEX_DEPLOY_KEY`
+    (Production scope, encrypted), created via
+    `npx convex deployment token create <name> --deployment <ref>`.
+  - **Outstanding:** the GitHub repo is **not yet connected** to the project, so
+    there is no auto-deploy on push and no PR previews — `vercel git connect`
+    fails until the Vercel GitHub App is authorized for `icoffiel/ff-pickem`.
+    Deploys are manual (`npx vercel deploy --prod`) until then.
