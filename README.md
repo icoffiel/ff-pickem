@@ -78,18 +78,26 @@ accounts are set up by a human:
   |---|---|---|---|
   | Development | `dev/iain` | `hidden-reindeer-734` | `npm run dev` (selected in `.env.local`) |
   | Production | default prod | `majestic-dalmatian-467` | `ff-pickem.vercel.app` |
-  | Preview | ephemeral | created per PR | Vercel preview builds |
+  | Preview | `preview/<git-branch>` | created per branch | Vercel preview builds |
 
-  Preview deployments are created automatically per pull request and **expire
-  after 5 days** on the Free/Starter plan
-  ([docs](https://docs.convex.dev/production/multiple-deployments)). They start
-  with an **empty database and no environment variables** — from M1 onward,
-  anything auth needs (`AUTH_EMAIL_FROM`, `AUTH_EMAIL_TRANSPORT`) must be
-  supplied to preview deployments too, or auth will not work in previews.
+  Preview deployments are created automatically, **one per git branch**, named
+  after the branch. Pushing again to the same branch reuses its backend, so data
+  survives across pushes. They **expire after 5 days** on the Free/Starter plan
+  ([docs](https://docs.convex.dev/production/multiple-deployments)) — merging or
+  deleting a branch does not remove them immediately.
+
+  Each preview starts with an **empty database and no environment variables**.
+  From M1 onward, anything auth needs (`AUTH_EMAIL_FROM`,
+  `AUTH_EMAIL_TRANSPORT`) must reach previews too, or auth will not work there.
+  Convex supports **default environment variables for preview deployments**, and
+  a `--preview-run <functionName>` flag to seed initial data
+  ([docs](https://docs.convex.dev/production/hosting/vercel)) — both are for M1+,
+  neither is configured yet.
 
   > An earlier **local** deployment (`.convex/local`) predates the cloud project
   > and is no longer selected. It was orphaned — the CLI could not resolve its
   > project — so commands failed until `--deployment` was passed explicitly.
+
 - **Resend** (M0a, issue #22) — **deferred: no sending domain owned yet.**
   Without a verified domain, Resend's shared `onboarding@resend.dev` sender
   returns a 403 for any recipient other than the Resend account holder's own
@@ -115,8 +123,17 @@ accounts are set up by a human:
     - **Production** — a production deploy key, created with
       `npx convex deployment token create <name> --deployment <ref>`.
     - **Preview** — a *preview* deploy key. The CLI has no flag for these
-      (as of `convex` 1.42.3); generate one from the Convex dashboard's project
-      settings.
+      (as of `convex` 1.42.3); generate one from the Convex dashboard's
+      **project** settings.
+
+      > A deploy key generated from a **deployment's** settings page is scoped to
+      > *that* deployment, so preview builds would push into it instead of
+      > creating per-branch backends. Verify by checking a preview build log for
+      > `[Preview] …:preview/<branch>` — a green build alone does not prove the
+      > key is the right type.
+
+  Preview URLs are gated by Vercel Deployment Protection (they return 302 to a
+  login) — open them while signed in to the Vercel team.
   - `icoffiel/ff-pickem` is **connected** via the Vercel GitHub App: pushes to
     `main` deploy to production, and pull requests get preview deployments.
   - The build command lives in `vercel.json`, **not** in the Vercel dashboard
