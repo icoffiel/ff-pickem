@@ -74,8 +74,16 @@ accounts are set up by a human:
 - **Convex** — done automatically by `npx convex dev` (currently a **local**
   beta deployment). A **cloud** deployment is needed before deploying to Vercel
   (M0d) — run `npx convex deploy` / configure a cloud dev deployment then.
-- **Resend** (M0a, issue #22) — create the account, add a sending domain,
-  publish SPF/DKIM DNS records, record the API key as a Convex env var. **Start
-  first** (DNS propagation lead time). Wired into auth in M1.
+- **Resend** (M0a, issue #22) — **deferred: no sending domain owned yet.**
+  Without a verified domain, Resend's shared `onboarding@resend.dev` sender
+  returns a 403 for any recipient other than the Resend account holder's own
+  address ([Resend error reference](https://resend.com/docs/api-reference/errors)).
+  A `.vercel.app` subdomain cannot be verified — SPF/DKIM require writing
+  records into a DNS zone, and that zone belongs to Vercel.
+  - **M1 (auth) is unblocked**: build and test the magic-link flow against your
+    own email on `resend.dev`.
+  - **M2 (invites) is blocked**: inviting real league members means emailing
+    other people, which needs a verified domain. Buy one and complete this
+    issue before M2 — allow for DNS propagation lead time.
 - **Vercel Hobby** (M0d, issue #25) — create the project, connect the repo, set
   `NEXT_PUBLIC_CONVEX_URL` + Convex env vars, deploy the skeleton.
