@@ -1,0 +1,30 @@
+{
+  "name": "ff-pickem",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "run-p dev:frontend dev:backend",
+    "dev:frontend": "next dev",
+    "dev:backend": "convex dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "convex": "^1.42.3",
+    "next": "^16.2.10",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@edge-runtime/vm": "^5.0.0",
+    "@types/node": "^20.19.43",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "convex-test": "^0.0.54",
+    "npm-run-all2": "^8.0.4",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
+  }
+}
