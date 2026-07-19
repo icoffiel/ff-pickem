@@ -71,11 +71,25 @@ functions and pure derivations.
 M0 also provisions three external services. Code is service-agnostic; the
 accounts are set up by a human:
 
-- **Convex** — **done.** Local development still runs against the **local** beta
-  deployment written into `.env.local` by `npx convex dev`. A separate **cloud
-  production** deployment (`iain-coffield:ff-pickem:production`) backs the Vercel
-  deploy; it is the default target of `npx convex deploy` and is not selected
-  locally, so the two do not interfere.
+- **Convex** — **done.** Project `iain-coffield/ff-pickem`, with a deployment per
+  environment:
+
+  | Deployment | Reference | Backend | Used by |
+  |---|---|---|---|
+  | Development | `dev/iain` | `hidden-reindeer-734` | `npm run dev` (selected in `.env.local`) |
+  | Production | default prod | `majestic-dalmatian-467` | `ff-pickem.vercel.app` |
+  | Preview | ephemeral | created per PR | Vercel preview builds |
+
+  Preview deployments are created automatically per pull request and **expire
+  after 5 days** on the Free/Starter plan
+  ([docs](https://docs.convex.dev/production/multiple-deployments)). They start
+  with an **empty database and no environment variables** — from M1 onward,
+  anything auth needs (`AUTH_EMAIL_FROM`, `AUTH_EMAIL_TRANSPORT`) must be
+  supplied to preview deployments too, or auth will not work in previews.
+
+  > An earlier **local** deployment (`.convex/local`) predates the cloud project
+  > and is no longer selected. It was orphaned — the CLI could not resolve its
+  > project — so commands failed until `--deployment` was passed explicitly.
 - **Resend** (M0a, issue #22) — **deferred: no sending domain owned yet.**
   Without a verified domain, Resend's shared `onboarding@resend.dev` sender
   returns a 403 for any recipient other than the Resend account holder's own
@@ -96,9 +110,13 @@ accounts are set up by a human:
     then runs the Next.js build, then pushes backend code
     ([Convex hosting docs](https://docs.convex.dev/production/hosting/vercel)).
     Hard-coding the URL would pin the build to a stale deployment.
-  - The **only** variable configured in Vercel is `CONVEX_DEPLOY_KEY`
-    (Production scope, encrypted), created via
-    `npx convex deployment token create <name> --deployment <ref>`.
+  - The **only** variable configured in Vercel is `CONVEX_DEPLOY_KEY`, set once
+    per environment (encrypted):
+    - **Production** — a production deploy key, created with
+      `npx convex deployment token create <name> --deployment <ref>`.
+    - **Preview** — a *preview* deploy key. The CLI has no flag for these
+      (as of `convex` 1.42.3); generate one from the Convex dashboard's project
+      settings.
   - `icoffiel/ff-pickem` is **connected** via the Vercel GitHub App: pushes to
     `main` deploy to production, and pull requests get preview deployments.
   - The build command lives in `vercel.json`, **not** in the Vercel dashboard
