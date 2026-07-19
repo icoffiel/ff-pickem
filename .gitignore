@@ -7,7 +7,10 @@
 next-env.d.ts
 
 # convex
-convex/_generated
+# NOTE: convex/_generated is deliberately NOT ignored. Convex generates it from
+# convex/ and states it "should be committed to the repo (your code won't
+# typecheck without it!)" — `npx convex codegen --help`. Ignoring it breaks any
+# build that clones from git, because app/page.tsx imports convex/_generated/api.
 
 # production
 /build
