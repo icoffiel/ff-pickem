@@ -1,0 +1,384 @@
+<title>Pick'em UI Flows — Prototype (gen 3, kid-friendly)</title>
+<!--
+  THROWAWAY PROTOTYPE — issue #11 (Prototype: key UI flows & screens).
+  GEN 3. Base direction = D (Stadium) refined for a family league of TWEENS (~10-13):
+  simple through clean hierarchy, sports-app-legit (not childish), unified view with
+  commissioner tools inline. Three responsive takes: G Gameday / H Scoreboard / I Streaks.
+  Sample data only, no backend. System fonts stand in for webfonts (CSP) — judge layout.
+  Gen-1 (A/B/C) and gen-2 (D/E/F) live in the branch history. Do NOT ship.
+-->
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: #111; }
+  button { font: inherit; cursor: pointer; }
+  input, button { font-family: inherit; }
+
+  /* ---------- prototype chrome ---------- */
+  .chrome-top { position: sticky; top: 0; z-index: 50; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; background: #17181c; border-bottom: 1px solid #2a2c33; }
+  .chrome-top .brand { color: #f4f4f5; font-weight: 700; font-size: 13px; margin-right: 6px; display: flex; align-items: center; gap: 8px; }
+  .chrome-top .brand small { color: #8b8d98; font-weight: 500; }
+  .seg { display: flex; flex-wrap: wrap; gap: 4px; }
+  .seg button { background: #22242b; color: #c9cbd3; border: 1px solid #2f323b; border-radius: 6px; padding: 5px 10px; font-size: 12px; font-weight: 600; }
+  .seg button:hover { background: #2c2f38; color: #fff; }
+  .seg button[aria-current="true"] { background: #f4f4f5; color: #111; border-color: #f4f4f5; }
+  .chrome-top .spacer { flex: 1; }
+  .chrome-top .themeToggle { background: #22242b; color: #c9cbd3; border: 1px solid #2f323b; border-radius: 6px; padding: 5px 10px; font-size: 12px; font-weight: 600; }
+  .stage { min-height: calc(100vh - 46px); }
+  .app { min-height: calc(100vh - 46px); }
+  .chrome-bar { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); z-index: 60; display: flex; align-items: center; gap: 4px; background: rgba(20,21,25,.92); backdrop-filter: blur(8px); border: 1px solid #34363f; border-radius: 999px; padding: 6px 8px; box-shadow: 0 10px 34px rgba(0,0,0,.45); }
+  .chrome-bar button { background: transparent; color: #d6d7de; border: 0; width: 34px; height: 34px; border-radius: 999px; font-size: 16px; display: grid; place-items: center; }
+  .chrome-bar button:hover { background: #2c2f38; color: #fff; }
+  .chrome-bar .vlabel { color: #f4f4f5; font-size: 12.5px; font-weight: 700; padding: 0 10px; white-space: nowrap; min-width: 200px; text-align: center; }
+  .chrome-bar .vlabel span { color: #8b8d98; font-weight: 500; }
+  @media (min-width: 721px) { .chrome-bar { bottom: 18px; } }
+
+  /* ================= TOKENS ================= */
+  /* G — Gameday (refined D, green) */
+  .app[data-variant="G"] { --bg:#eef1f4; --surface:#fff; --surface2:#f3f6f9; --ink:#0f1720; --dim:#63717f; --line:#e2e8ee; --accent:#10a35a; --accent2:#0a6cf0; --accentInk:#fff; --good:#10a35a; --bad:#d8382b; }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .app[data-variant="G"]{ --bg:#0a0f14; --surface:#141b23; --surface2:#1c2530; --ink:#eef3f8; --dim:#93a2b2; --line:#26313d; --accent:#25c574; --accent2:#4f9bff; --accentInk:#06130b; } }
+  :root[data-theme="dark"] .app[data-variant="G"]{ --bg:#0a0f14; --surface:#141b23; --surface2:#1c2530; --ink:#eef3f8; --dim:#93a2b2; --line:#26313d; --accent:#25c574; --accent2:#4f9bff; --accentInk:#06130b; }
+
+  /* H — Scoreboard (electric blue + orange, pro/broadcast) */
+  .app[data-variant="H"] { --bg:#eceff3; --surface:#fff; --surface2:#f2f5f9; --ink:#0d1526; --dim:#5c6a80; --line:#dfe4ec; --accent:#1552d8; --accent2:#ff5a1f; --accentInk:#fff; --good:#12a150; --bad:#e23b2e; --band:#0d1b3e; --bandInk:#eaf0ff; }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .app[data-variant="H"]{ --bg:#080c16; --surface:#111a2c; --surface2:#182339; --ink:#eef2fb; --dim:#93a2bd; --line:#233150; --accent:#4f86ff; --accent2:#ff7a45; --accentInk:#06122b; --band:#0a1330; --bandInk:#eaf0ff; } }
+  :root[data-theme="dark"] .app[data-variant="H"]{ --bg:#080c16; --surface:#111a2c; --surface2:#182339; --ink:#eef2fb; --dim:#93a2bd; --line:#233150; --accent:#4f86ff; --accent2:#ff7a45; --accentInk:#06122b; --band:#0a1330; --bandInk:#eaf0ff; }
+
+  /* I — Streaks (energetic orange, motivational) */
+  .app[data-variant="I"] { --bg:#f5f1ec; --surface:#fffdfb; --surface2:#f2ece4; --ink:#22190f; --dim:#7a6b5a; --line:#e8ded1; --accent:#ef6c0a; --accent2:#0f9d58; --accentInk:#fff; --good:#0f9d58; --bad:#d8382b; --heat:#ef6c0a; }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .app[data-variant="I"]{ --bg:#161009; --surface:#201810; --surface2:#2a2016; --ink:#f7efe4; --dim:#b09a82; --line:#3a2c1c; --accent:#ff8a3d; --accent2:#3ecb83; --accentInk:#1a1006; --heat:#ff8a3d; } }
+  :root[data-theme="dark"] .app[data-variant="I"]{ --bg:#161009; --surface:#201810; --surface2:#2a2016; --ink:#f7efe4; --dim:#b09a82; --line:#3a2c1c; --accent:#ff8a3d; --accent2:#3ecb83; --accentInk:#1a1006; --heat:#ff8a3d; }
+
+  .app { background: var(--bg); color: var(--ink); }
+  .tc { display: inline-flex; align-items: center; justify-content: center; font-weight: 800; color: #fff; border-radius: 8px; letter-spacing: .02em; flex: none; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 20px 18px 130px; }
+  @media (max-width: 720px){ .wrap { padding: 14px 13px 130px; } }
+
+  /* shared: bold app bar + bottom tabs (used by all three, styled per token) */
+  .appbar { position: sticky; top: 46px; z-index: 8; background: var(--surface); border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 16px; padding: 12px 20px; }
+  .appbar .logo { font-weight: 900; font-size: 17px; letter-spacing: -.02em; display: flex; align-items: center; gap: 8px; }
+  .appbar .logo .b { background: var(--accent); color: var(--accentInk); width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; font-size: 14px; }
+  .appbar nav { display: flex; gap: 4px; margin-left: auto; }
+  .appbar nav a { text-decoration: none; color: var(--dim); font-weight: 800; font-size: 14px; padding: 8px 12px; border-radius: 9px; }
+  .appbar nav a.on { color: var(--ink); background: var(--surface2); }
+  .appbar .gear { margin-left: 8px; background: var(--surface2); border: 1px solid var(--line); color: var(--dim); width: 34px; height: 34px; border-radius: 9px; font-size: 15px; }
+  .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 7; background: var(--surface); border-top: 1px solid var(--line); display: none; grid-template-columns: repeat(4,1fr); padding: 8px 6px calc(8px + env(safe-area-inset-bottom)); }
+  .tabbar a { text-decoration: none; text-align: center; font-size: 11px; font-weight: 800; color: var(--dim); display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .tabbar a .ico { font-size: 20px; } .tabbar a.on { color: var(--accent); }
+  @media (max-width: 720px){ .appbar nav { display: none; } .tabbar { display: grid; } }
+
+  .hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 6px; }
+  .hero h1 { font-size: clamp(23px,5vw,32px); font-weight: 900; letter-spacing: -.03em; margin: 0; }
+  .hero .klabel { font-size: 13px; color: var(--dim); font-weight: 800; }
+  .lock { display: inline-flex; align-items: center; gap: 8px; background: color-mix(in srgb, var(--accent) 12%, var(--surface)); color: var(--ink); border-radius: 999px; padding: 8px 14px; font-size: 13px; font-weight: 800; }
+  .lock .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .progress { display: flex; align-items: center; gap: 12px; font-weight: 900; margin: 16px 0; font-variant-numeric: tabular-nums; }
+  .progress .track { flex: 1; height: 10px; border-radius: 999px; background: var(--surface2); overflow: hidden; }
+  .progress .fill { height: 100%; background: var(--accent); }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 16px; box-shadow: 0 2px 12px rgba(15,25,40,.05); }
+  .card h3 { margin: 0 0 12px; font-size: 15px; font-weight: 900; display: flex; justify-content: space-between; align-items: baseline; }
+  .card h3 a { font-size: 12px; color: var(--accent); text-decoration: none; font-weight: 800; }
+  .field label { display: block; font-weight: 800; font-size: 13px; margin: 14px 0 6px; }
+  .field input { width: 100%; border: 2px solid var(--line); border-radius: 12px; padding: 13px; font-size: 16px; background: var(--surface2); color: var(--ink); }
+  .btn { background: var(--accent); color: var(--accentInk); border: 0; padding: 13px 20px; border-radius: 12px; font-weight: 900; font-size: 15px; }
+  .btn.ghost { background: var(--surface2); color: var(--ink); }
+  .note { font-size: 13px; color: var(--dim); line-height: 1.6; }
+  .cta { position: fixed; left: 50%; transform: translateX(-50%); bottom: 140px; z-index: 6; width: min(460px, calc(100% - 28px)); }
+  .cta button { width: 100%; background: var(--accent); color: var(--accentInk); border: 0; padding: 15px; border-radius: 14px; font-size: 16px; font-weight: 900; box-shadow: 0 8px 26px color-mix(in srgb, var(--accent) 45%, transparent); }
+  @media (min-width: 721px){ .cta { bottom: 24px; } }
+  .state { text-align: center; padding: 56px 18px; } .state .emo { font-size: 46px; } .state h2 { font-size: 21px; font-weight: 900; margin: 12px 0 8px; }
+  .state p { color: var(--dim); max-width: 44ch; margin: 0 auto 18px; line-height: 1.6; }
+  .tie { text-align: center; } .tie h2 { margin: 0 0 4px; font-size: 17px; font-weight: 900; } .tie p { margin: 0 0 12px; color: var(--dim); font-size: 13.5px; }
+  .tie input { width: 140px; text-align: center; font-size: 30px; font-weight: 900; border: 2px solid var(--line); border-radius: 14px; padding: 10px; background: var(--surface2); color: var(--ink); }
+
+  /* ---- G: card grid picks ---- */
+  .G-games { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px,1fr)); gap: 14px; }
+  .G-game { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px; box-shadow: 0 2px 12px rgba(15,25,40,.05); }
+  .G-game .slot { font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; font-weight: 900; color: var(--dim); display: flex; justify-content: space-between; margin-bottom: 12px; }
+  .G-mu { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .G-team { border: 2px solid var(--line); border-radius: 14px; padding: 14px 10px; background: var(--surface); display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+  .G-team .tc { width: 50px; height: 50px; font-size: 15px; border-radius: 14px; }
+  .G-team .nm { font-weight: 800; font-size: 15px; } .G-team .rec { font-size: 12px; color: var(--dim); font-weight: 700; }
+  .G-team .chk { font-size: 11px; font-weight: 900; color: var(--accent); min-height: 14px; letter-spacing: .04em; }
+  .G-team.sel { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); } .G-team.sel .nm { color: var(--accent); }
+  .row { display: flex; align-items: center; gap: 12px; padding: 11px 2px; border-bottom: 1px solid var(--line); }
+  .row:last-child { border-bottom: 0; } .row.me { background: color-mix(in srgb, var(--accent) 9%, var(--surface)); border-radius: 12px; padding: 11px; }
+  .row .r { width: 30px; text-align: center; font-weight: 900; font-size: 16px; color: var(--dim); font-variant-numeric: tabular-nums; } .row .r.top { color: var(--accent); }
+  .row .grow { flex: 1; min-width: 0; } .row .nm { font-weight: 800; font-size: 14.5px; } .row .sub { font-size: 12px; color: var(--dim); }
+  .row .pts { font-weight: 900; font-size: 19px; font-variant-numeric: tabular-nums; } .row .pts small { font-size: 11px; color: var(--dim); font-weight: 700; }
+
+  /* ---- H: scoreboard rows + competition band ---- */
+  .H-band { background: var(--band); color: var(--bandInk); border-radius: 16px; padding: 14px 18px; display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+  .H-band .rank { font-size: 40px; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
+  .H-band .rank small { font-size: 14px; opacity: .7; font-weight: 800; }
+  .H-band .txt { flex: 1; } .H-band .txt .a { font-weight: 900; font-size: 16px; } .H-band .txt .b { font-size: 13px; opacity: .8; margin-top: 2px; }
+  .H-band .chip { background: color-mix(in srgb, var(--accent2) 88%, #000); color: #fff; font-weight: 900; font-size: 12px; padding: 6px 11px; border-radius: 999px; }
+  .H-sb { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+  .H-g { display: grid; grid-template-columns: 1fr 46px 1fr; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line); gap: 6px; }
+  .H-g:last-child { border-bottom: 0; }
+  .H-pk { display: flex; align-items: center; gap: 9px; border: 2px solid var(--line); background: var(--surface); border-radius: 12px; padding: 9px 11px; color: var(--ink); font-weight: 800; }
+  .H-pk.right { flex-direction: row-reverse; text-align: right; }
+  .H-pk .tc { width: 34px; height: 34px; font-size: 12px; border-radius: 9px; } .H-pk .nm { font-size: 14px; } .H-pk .rec { font-size: 11px; color: var(--dim); font-weight: 700; }
+  .H-pk.sel { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); } .H-pk.sel .nm { color: var(--accent); }
+  .H-at { text-align: center; font-size: 11px; font-weight: 900; color: var(--dim); } .H-at .t { font-size: 10px; font-weight: 700; margin-top: 3px; }
+  .H-tbl-h { display: grid; grid-template-columns: 30px 1fr 60px 60px; gap: 8px; padding: 8px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--dim); font-weight: 800; }
+  .H-tr { display: grid; grid-template-columns: 30px 1fr 60px 60px; gap: 8px; align-items: center; padding: 12px 14px; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+  .H-tr.me { background: color-mix(in srgb, var(--accent) 8%, var(--surface)); } .H-tr .r { font-weight: 900; color: var(--dim); text-align: center; } .H-tr .r.top { color: var(--accent2); }
+  .H-tr .nm { font-weight: 800; font-size: 14px; } .H-tr .nm small { display: block; color: var(--dim); font-weight: 600; font-size: 11.5px; }
+  .H-tr .num { text-align: right; font-weight: 800; } .H-tr .num.big { font-size: 17px; }
+
+  /* ---- I: motivational stacked bars + streak ---- */
+  .I-motiv { background: linear-gradient(120deg, color-mix(in srgb, var(--heat) 16%, var(--surface)), var(--surface)); border: 1px solid var(--line); border-radius: 18px; padding: 16px 18px; display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+  .I-motiv .flame { font-size: 34px; } .I-motiv .txt { flex: 1; } .I-motiv .txt .a { font-weight: 900; font-size: 17px; } .I-motiv .txt .b { font-size: 13px; color: var(--dim); margin-top: 2px; }
+  .I-motiv .rankpill { background: var(--accent); color: var(--accentInk); border-radius: 12px; padding: 8px 12px; font-weight: 900; text-align: center; font-variant-numeric: tabular-nums; }
+  .I-motiv .rankpill small { display: block; font-size: 10px; opacity: .85; }
+  .I-bar { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; margin-bottom: 10px; }
+  .I-bar .slot { font-size: 11px; font-weight: 800; color: var(--dim); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 9px; display: flex; justify-content: space-between; }
+  .I-mu { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: stretch; }
+  .I-side { border: 2px solid var(--line); border-radius: 12px; padding: 10px; display: flex; align-items: center; gap: 9px; background: var(--surface); font-weight: 800; }
+  .I-side.right { flex-direction: row-reverse; text-align: right; }
+  .I-side .tc { width: 36px; height: 36px; font-size: 12px; border-radius: 10px; } .I-side .nm { font-size: 14px; } .I-side .rec { font-size: 11px; color: var(--dim); font-weight: 700; }
+  .I-side.sel { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); } .I-side.sel .nm { color: var(--accent); }
+  .I-vs { align-self: center; font-size: 11px; font-weight: 900; color: var(--dim); }
+  .I-srow { display: flex; align-items: center; gap: 12px; padding: 12px 2px; border-bottom: 1px solid var(--line); }
+  .I-srow:last-child { border-bottom: 0; } .I-srow.me { background: color-mix(in srgb, var(--accent) 9%, var(--surface)); border-radius: 12px; padding: 12px; }
+  .I-srow .r { width: 26px; text-align: center; font-weight: 900; color: var(--dim); font-variant-numeric: tabular-nums; }
+  .I-srow .mv { font-size: 12px; font-weight: 900; width: 20px; text-align: center; } .I-srow .mv.up { color: var(--good); } .I-srow .mv.down { color: var(--bad); } .I-srow .mv.flat { color: var(--dim); opacity: .5; }
+  .I-srow .grow { flex: 1; } .I-srow .nm { font-weight: 800; font-size: 14.5px; display: flex; align-items: center; gap: 7px; } .I-srow .sub { font-size: 12px; color: var(--dim); }
+  .I-srow .streak { font-size: 11px; font-weight: 900; color: var(--heat); } .I-srow .pts { font-weight: 900; font-size: 18px; font-variant-numeric: tabular-nums; }
+</style>
+
+<div class="chrome-top">
+  <div class="brand">🏈 Pick'em Flows <small>proto gen-3 · tweens · #11</small></div>
+  <div class="seg" id="screenSeg"></div>
+  <div class="spacer"></div>
+  <button class="themeToggle" id="themeToggle" title="Toggle light / dark">◑ Theme</button>
+</div>
+
+<div class="stage"><div class="app" id="app" data-variant="G"></div></div>
+
+<div class="chrome-bar" role="group" aria-label="Design direction switcher">
+  <button id="prevV" title="Previous direction (←)">‹</button>
+  <div class="vlabel" id="vlabel"></div>
+  <button id="nextV" title="Next direction (→)">›</button>
+</div>
+
+<script>
+const T = {
+  BUF:["Buffalo","BUF","#00338D","4-1"], NE:["New England","NE","#002244","1-4"],
+  KC:["Kansas City","KC","#E31837","5-0"], LV:["Las Vegas","LV","#111111","2-3"],
+  DAL:["Dallas","DAL","#0B2265","3-2"], PHI:["Philadelphia","PHI","#004C54","4-1"],
+  SF:["San Francisco","SF","#AA0000","3-2"], SEA:["Seattle","SEA","#002244","2-3"],
+  GB:["Green Bay","GB","#203731","3-1"], MIN:["Minnesota","MIN","#4F2683","4-1"],
+  MIA:["Miami","MIA","#008E97","1-4"], NYJ:["N.Y. Jets","NYJ","#125740","2-3"],
+  CIN:["Cincinnati","CIN","#FB4F14","2-3"], BAL:["Baltimore","BAL","#241773","3-2"],
+};
+const LEAGUE = { name:"The Coffiel Family League", season:"2025", week:5, members:8, lockLabel:"Sun 1:00 PM ET" };
+const GAMES = [
+  { id:1, away:"BUF", home:"NE",  slot:"Sun 1:00 PM", pick:"BUF" },
+  { id:2, away:"DAL", home:"PHI", slot:"Sun 1:00 PM", pick:null  },
+  { id:3, away:"KC",  home:"LV",  slot:"Sun 1:00 PM", pick:"KC"  },
+  { id:4, away:"SF",  home:"SEA", slot:"Sun 4:25 PM", pick:"SF"  },
+  { id:5, away:"GB",  home:"MIN", slot:"Sun 4:25 PM", pick:null  },
+  { id:6, away:"MIA", home:"NYJ", slot:"Sun 8:20 PM", pick:"NYJ" },
+  { id:7, away:"CIN", home:"BAL", slot:"Mon 8:15 PM", pick:"BAL", mnf:true },
+];
+let mnfGuess = 47;
+// rank movement (mv) + streak used by variant I; me = Gridiron Gurus at #2
+const STAND = [
+  { name:"Turf Titans", who:"Sarah", wk:4, total:24, me:false, mv:0, streak:2 },
+  { name:"Gridiron Gurus", who:"you", wk:3, total:22, me:true, comm:true, mv:+1, streak:3 },
+  { name:"Pigskin Prophets", who:"Mike", wk:3, total:21, me:false, mv:-1, streak:0 },
+  { name:"Hail Marys", who:"Dana", wk:4, total:20, me:false, mv:+2, streak:1 },
+  { name:"Fourth & Long", who:"Tom", wk:2, total:19, me:false, mv:-1, streak:0 },
+  { name:"Blitz Brigade", who:"Jess", wk:2, total:18, me:false, mv:0, streak:0 },
+  { name:"End Zone Elite", who:"Ryan", wk:3, total:16, me:false, mv:+1, streak:0 },
+  { name:"Pick Six Crew", who:"Kim", wk:1, total:14, me:false, mv:-2, streak:0 },
+];
+const WEEKLY = [
+  { name:"Hail Marys", who:"Dana", correct:4, guess:45, me:false, winner:true, note:"guessed 45 · actual 47" },
+  { name:"Turf Titans", who:"Sarah", correct:4, guess:52, me:false, note:"guessed 52 — lost tiebreak" },
+  { name:"Gridiron Gurus", who:"you", correct:3, guess:47, me:true, note:"nailed the MNF guess!" },
+  { name:"Pigskin Prophets", who:"Mike", correct:3, guess:40, me:false, note:"" },
+  { name:"Blitz Brigade", who:"Jess", correct:2, guess:null, me:false, note:"no guess" },
+];
+function chip(t, cls=""){ const [ ,abbr,color]=T[t]; return `<span class="tc ${cls}" style="background:${color}">${abbr}</span>`; }
+function picked(){ return GAMES.filter(g=>g.pick).length; }
+const navItems = [["home","🏠","League"],["picks","🏈","Picks"],["standings","🏆","Standings"],["invite","✉️","Invite"]];
+function navBar(on){ return navItems.map(([k,i,l])=>`<a href="#" class="${on===k?'on':''}" data-screen="${k}">${l}</a>`).join(""); }
+function tabBar(on){ return navItems.map(([k,i,l])=>`<a href="#" class="${on===k?'on':''}" data-screen="${k}"><span class="ico">${i}</span>${l}</a>`).join(""); }
+function shell(on, inner){ return `
+  <div class="appbar"><div class="logo"><span class="b">P</span> Pick'em</div><nav>${navBar(on)}</nav><button class="gear" title="Commissioner tools">⚙</button></div>
+  <div class="wrap">${inner}</div>
+  <nav class="tabbar">${tabBar(on)}</nav>`; }
+
+/* ---- shared simple screens (create / invite / empty / error) tuned for tweens ---- */
+function createScreen(on){ return shell(on, `
+  <div class="hero"><div><div class="klabel">New league</div><h1>Start a league</h1></div></div>
+  <div class="card" style="max-width:540px;margin-top:14px">
+    <div class="field"><label>League name</label><input value="The Coffiel Family League"></div>
+    <div class="field"><label>Your team name</label><input placeholder="e.g. Gridiron Gurus"></div>
+    <div class="field"><label>Season</label><input value="2025 · Weeks 1–18" readonly></div>
+    <div class="note" style="background:var(--surface2);border-radius:12px;padding:13px;margin-top:14px"><b style="color:var(--ink)">Simple rules:</b> 1 point for each right pick. Picks lock when the first game starts. If two people tie for the week, the closest guess on the Monday-night total wins. <span style="color:var(--accent);font-weight:800">Change the rules ›</span></div>
+    <button class="btn" style="margin-top:14px;width:100%">Create league</button></div>`); }
+function inviteScreen(on){ return shell(on, `
+  <div class="hero"><div><div class="klabel">${LEAGUE.name}</div><h1>Join the league</h1></div></div>
+  <div class="card" style="max-width:440px;margin:14px auto 0;text-align:center">
+    ${chip("BUF")}
+    <div class="note" style="margin-top:12px">You're invited to</div>
+    <div style="font-size:22px;font-weight:900;margin:2px 0">${LEAGUE.name}</div>
+    <div class="note">by Iain · 8 people playing</div>
+    <div class="field" style="text-align:left;margin-top:14px"><label>Pick your team name</label><input placeholder="e.g. Blitz Brigade"></div>
+    <div class="note" style="text-align:left">This name shows up on the standings. You're joining as <b style="color:var(--ink)">quifster@gmail.com</b>.</div>
+    <button class="btn" style="width:100%;margin-top:12px">Join league</button></div>`); }
+function emptyScreen(on){ return shell(on, `<div class="state"><div class="emo">📅</div><h2>No games yet</h2>
+  <p>This week's NFL schedule isn't out yet. Games show up here on their own, and picks open automatically. Nothing to do right now!</p>
+  <button class="btn ghost">Remind me when picks open</button></div>`); }
+function errorScreen(on){ return shell(on, `<div class="state"><div class="emo">⏰</div><h2>This invite ran out</h2>
+  <p>Your invite to <b>${LEAGUE.name}</b> expired — invites last 14 days. Ask Iain to send you a new one.</p>
+  <button class="btn">Ask for a new invite</button>
+  <div class="note" style="max-width:44ch;margin:22px auto 0;text-align:left;background:var(--surface2);border-radius:12px;padding:14px">
+    <b style="color:var(--ink)">Other things that can happen:</b><br>🔒 Picks are locked — the games already started, so this week can't change.<br>📧 Wrong email — the invite went to sarah@…, but you're signed in as quifster@…</div></div>`); }
+
+/* =========================== G — Gameday =========================== */
+const G = {};
+G.home = () => shell("home", `
+  <div class="hero"><div><div class="klabel">Season ${LEAGUE.season} · ${LEAGUE.members} teams</div><h1>${LEAGUE.name}</h1></div>
+    <div class="lock"><span class="dot"></span>Week ${LEAGUE.week} open</div></div>
+  <div class="card" style="background:var(--accent);color:var(--accentInk);border:0;box-shadow:0 8px 24px color-mix(in srgb,var(--accent) 40%,transparent);margin-top:16px">
+    <div style="font-size:13px;font-weight:900;opacity:.9">YOUR WEEK ${LEAGUE.week}</div>
+    <div style="font-size:23px;font-weight:900;margin:2px 0 14px">${picked()} of ${GAMES.length} games picked</div>
+    <a href="#" data-screen="picks"><button style="background:#fff;color:var(--accent);border:0;padding:14px;border-radius:12px;font-weight:900;width:100%;font-size:16px">Finish my picks →</button></a></div>
+  <div class="card" style="margin-top:14px"><h3>Standings <a href="#" data-screen="standings">See all</a></h3>
+    ${STAND.slice(0,4).map((s,i)=>`<div class="row ${s.me?'me':''}"><span class="r ${i===0?'top':''}">${i+1}</span>
+      <span class="grow"><span class="nm">${s.name}</span><span class="sub">${s.who}</span></span><span class="pts">${s.total}<small> pts</small></span></div>`).join("")}</div>`);
+G.picks = () => shell("picks", `
+  <div class="hero"><div><div class="klabel">${LEAGUE.name}</div><h1>Make your picks</h1></div>
+    <div class="lock"><span class="dot"></span>Locks ${LEAGUE.lockLabel}</div></div>
+  <div class="progress"><span>${picked()}/${GAMES.length}</span><div class="track"><div class="fill" style="width:${picked()/GAMES.length*100}%"></div></div><span>done</span></div>
+  <div class="G-games">
+    ${GAMES.filter(g=>!g.mnf).map(g=>`<div class="G-game"><div class="slot"><span>${g.slot}</span><span>${g.pick?'✓ Picked':'Pick a team'}</span></div>
+      <div class="G-mu">
+        <button class="G-team ${g.pick===g.away?'sel':''}" data-pick="${g.id}" data-team="${g.away}">${chip(g.away)}<span class="nm">${T[g.away][1]}</span><span class="rec">${T[g.away][3]}</span><span class="chk">${g.pick===g.away?'YOUR PICK':''}</span></button>
+        <button class="G-team ${g.pick===g.home?'sel':''}" data-pick="${g.id}" data-team="${g.home}">${chip(g.home)}<span class="nm">${T[g.home][1]}</span><span class="rec">${T[g.home][3]}</span><span class="chk">${g.pick===g.home?'YOUR PICK':''}</span></button>
+      </div></div>`).join("")}
+    <div class="G-game tie"><h2>🌙 Monday-night guess</h2><p>How many total points in ${T["CIN"][1]} @ ${T["BAL"][1]}? Only used to break a tie.</p>
+      <input type="number" value="${mnfGuess}" data-mnf inputmode="numeric"></div>
+  </div>
+  <div class="cta"><button>Save ${picked()} picks</button></div>`);
+G.standings = () => shell("standings", `
+  <div class="hero"><div><div class="klabel">${LEAGUE.name} · through Week ${LEAGUE.week-1}</div><h1>Standings</h1></div></div>
+  <div class="card" style="margin-top:16px"><h3>Season — total points</h3>
+    ${STAND.map((s,i)=>`<div class="row ${s.me?'me':''}"><span class="r ${i===0?'top':''}">${i+1}</span>
+      <span class="grow"><span class="nm">${s.name}${s.comm?' ◆':''}</span><span class="sub">${s.who}</span></span><span class="pts">${s.total}</span></div>`).join("")}</div>
+  <div class="card" style="margin-top:14px"><h3>Week ${LEAGUE.week-1} winner</h3>
+    <div class="row"><span class="r top">🏆</span><span class="grow"><span class="nm">Hail Marys</span><span class="sub">Dana · 4 right, won the Monday-night tiebreaker</span></span></div>
+    <div class="note" style="margin-top:10px">Dana and Sarah both got 4 right. The Monday-night total was 47 — Dana guessed 45 (closer than Sarah's 52), so Dana wins the week. Both still earn 4 points.</div></div>`);
+G.create = () => createScreen("home"); G.invite = () => inviteScreen("invite"); G.empty = () => emptyScreen("picks"); G.error = () => errorScreen("invite");
+
+/* =========================== H — Scoreboard =========================== */
+const H = {};
+H.home = () => shell("home", `
+  <div class="H-band"><div class="rank">#2<small>/8</small></div>
+    <div class="txt"><div class="a">You're in 2nd place</div><div class="b">2 points behind Turf Titans · Week ${LEAGUE.week} picks are open</div></div>
+    <div class="chip">${picked()}/${GAMES.length} picked</div></div>
+  <a href="#" data-screen="picks"><button class="btn" style="width:100%;padding:15px;font-size:16px">Finish your Week ${LEAGUE.week} picks →</button></a>
+  <div class="card" style="margin-top:16px;padding:0"><h3 style="padding:16px 16px 0">Standings <a href="#" data-screen="standings">Full board</a></h3>
+    <div class="H-tbl-h"><span>#</span><span>Team</span><span style="text-align:right">Wk ${LEAGUE.week-1}</span><span style="text-align:right">Pts</span></div>
+    ${STAND.slice(0,5).map((s,i)=>`<div class="H-tr ${s.me?'me':''}"><span class="r ${i===0?'top':''}">${i+1}</span>
+      <span class="nm">${s.name}<small>${s.who}</small></span><span class="num">+${s.wk}</span><span class="num big">${s.total}</span></div>`).join("")}</div>`);
+H.picks = () => shell("picks", `
+  <div class="hero"><div><div class="klabel">${LEAGUE.name} · Week ${LEAGUE.week}</div><h1>Make your picks</h1></div>
+    <div class="lock"><span class="dot"></span>Locks ${LEAGUE.lockLabel}</div></div>
+  <div class="progress"><span>${picked()}/${GAMES.length}</span><div class="track"><div class="fill" style="width:${picked()/GAMES.length*100}%"></div></div><span>picked</span></div>
+  <div class="H-sb">${GAMES.filter(g=>!g.mnf).map(g=>`<div class="H-g">
+    <button class="H-pk ${g.pick===g.away?'sel':''}" data-pick="${g.id}" data-team="${g.away}">${chip(g.away)}<span><span class="nm">${T[g.away][1]}</span><span class="rec"> ${T[g.away][3]}</span></span></button>
+    <div class="H-at">@<div class="t">${g.slot.split(' ')[0]}</div></div>
+    <button class="H-pk right ${g.pick===g.home?'sel':''}" data-pick="${g.id}" data-team="${g.home}">${chip(g.home)}<span><span class="nm">${T[g.home][1]}</span><span class="rec"> ${T[g.home][3]}</span></span></button>
+  </div>`).join("")}</div>
+  <div class="card tie" style="margin-top:16px;max-width:420px"><h2>🌙 Monday-night total</h2><p>Total points in ${T["CIN"][1]} @ ${T["BAL"][1]} — tiebreaker only.</p>
+    <input type="number" value="${mnfGuess}" data-mnf inputmode="numeric"></div>
+  <div class="cta"><button>Lock in ${picked()} picks</button></div>`);
+H.standings = () => shell("standings", `
+  <div class="H-band"><div class="rank">#2<small>/8</small></div><div class="txt"><div class="a">Gridiron Gurus</div><div class="b">22 points · 2 behind 1st · moved up 1 spot this week</div></div></div>
+  <div class="card" style="padding:0"><h3 style="padding:16px 16px 0">Season standings</h3>
+    <div class="H-tbl-h"><span>#</span><span>Team</span><span style="text-align:right">Wk ${LEAGUE.week-1}</span><span style="text-align:right">Total</span></div>
+    ${STAND.map((s,i)=>`<div class="H-tr ${s.me?'me':''}"><span class="r ${i===0?'top':''}">${i+1}</span>
+      <span class="nm">${s.name}<small>${s.who}${s.comm?' · commissioner':''}</small></span><span class="num">+${s.wk}</span><span class="num big">${s.total}</span></div>`).join("")}</div>
+  <div class="card" style="margin-top:14px;padding:0"><h3 style="padding:16px 16px 0">Week ${LEAGUE.week-1} winner</h3>
+    <div class="H-tbl-h"><span>#</span><span>Team</span><span style="text-align:right">Right</span><span style="text-align:right">MNF</span></div>
+    ${WEEKLY.map((w,i)=>`<div class="H-tr ${w.me?'me':''}"><span class="r ${i===0?'top':''}">${i+1}</span>
+      <span class="nm">${w.name}${w.winner?' 🏆':''}<small>${w.note||w.who}</small></span><span class="num">${w.correct}</span><span class="num">${w.guess??'—'}</span></div>`).join("")}
+    <div class="note" style="padding:12px 16px">Tie at 4 right → closest to the Monday-night total (47) wins. Dana's 45 beats Sarah's 52.</div></div>`);
+H.create = () => createScreen("home"); H.invite = () => inviteScreen("invite"); H.empty = () => emptyScreen("picks"); H.error = () => errorScreen("invite");
+
+/* =========================== I — Streaks =========================== */
+const I = {};
+function mvMark(mv){ return mv>0?`<span class="mv up">▲${mv}</span>`:mv<0?`<span class="mv down">▼${-mv}</span>`:`<span class="mv flat">–</span>`; }
+I.home = () => shell("home", `
+  <div class="I-motiv"><div class="flame">🔥</div>
+    <div class="txt"><div class="a">3-week streak going!</div><div class="b">You're 2nd of 8 — just 2 points behind Sarah. Keep it rolling.</div></div>
+    <div class="rankpill">#2<small>of 8</small></div></div>
+  <div class="card" style="background:var(--accent);color:var(--accentInk);border:0;margin-bottom:14px">
+    <div style="font-size:13px;font-weight:900;opacity:.9">WEEK ${LEAGUE.week}</div>
+    <div style="font-size:22px;font-weight:900;margin:2px 0 12px">${picked()} of ${GAMES.length} picked — ${GAMES.length-picked()} to go</div>
+    <a href="#" data-screen="picks"><button style="background:#fff;color:var(--accent);border:0;padding:13px;border-radius:12px;font-weight:900;width:100%;font-size:15px">Finish &amp; keep your streak →</button></a></div>
+  <div class="card"><h3>Movers this week <a href="#" data-screen="standings">Full board</a></h3>
+    ${STAND.slice(0,5).map((s,i)=>`<div class="I-srow ${s.me?'me':''}"><span class="r">${i+1}</span>${mvMark(s.mv)}
+      <span class="grow"><span class="nm">${s.name}${s.streak>1?` <span class="streak">🔥${s.streak}</span>`:''}</span><span class="sub">${s.who}</span></span><span class="pts">${s.total}</span></div>`).join("")}</div>`);
+I.picks = () => shell("picks", `
+  <div class="I-motiv"><div class="flame">🔥</div><div class="txt"><div class="a">${GAMES.length-picked()} picks left to lock your streak</div><div class="b">Get them in before ${LEAGUE.lockLabel}.</div></div>
+    <div class="rankpill">${picked()}/${GAMES.length}<small>picked</small></div></div>
+  ${GAMES.filter(g=>!g.mnf).map(g=>`<div class="I-bar"><div class="slot"><span>${g.slot}</span><span>${g.pick?'✓ Locked in':'Tap your pick'}</span></div>
+    <div class="I-mu">
+      <button class="I-side ${g.pick===g.away?'sel':''}" data-pick="${g.id}" data-team="${g.away}">${chip(g.away)}<span><span class="nm">${T[g.away][1]}</span><span class="rec"> ${T[g.away][3]}</span></span></button>
+      <span class="I-vs">VS</span>
+      <button class="I-side right ${g.pick===g.home?'sel':''}" data-pick="${g.id}" data-team="${g.home}">${chip(g.home)}<span><span class="nm">${T[g.home][1]}</span><span class="rec"> ${T[g.home][3]}</span></span></button>
+    </div></div>`).join("")}
+  <div class="I-bar tie"><h2>🌙 Monday-night bonus guess</h2><p>Total points in ${T["CIN"][1]} @ ${T["BAL"][1]} — breaks a tie if you need it.</p>
+    <input type="number" value="${mnfGuess}" data-mnf inputmode="numeric"></div>
+  <div class="cta"><button>Lock in ${picked()} picks 🔒</button></div>`);
+I.standings = () => shell("standings", `
+  <div class="I-motiv"><div class="flame">🏆</div><div class="txt"><div class="a">You're 2nd of 8</div><div class="b">Up 1 spot this week · 🔥 3-week streak · 2 points from the top</div></div><div class="rankpill">22<small>points</small></div></div>
+  <div class="card"><h3>Season standings</h3>
+    ${STAND.map((s,i)=>`<div class="I-srow ${s.me?'me':''}"><span class="r">${i+1}</span>${mvMark(s.mv)}
+      <span class="grow"><span class="nm">${s.name}${s.comm?' ◆':''}${s.streak>1?` <span class="streak">🔥${s.streak}</span>`:''}</span><span class="sub">${s.who}</span></span><span class="pts">${s.total}</span></div>`).join("")}
+    <div class="note" style="margin-top:10px">▲▼ shows who moved up or down since last week. 🔥 is a winning streak.</div></div>
+  <div class="card" style="margin-top:14px"><h3>Week ${LEAGUE.week-1} winner</h3>
+    <div class="I-srow"><span class="r">🏆</span><span class="grow"><span class="nm">Hail Marys</span><span class="sub">Dana · 4 right, won the Monday-night tiebreaker (guessed 45, actual 47)</span></span></div></div>`);
+I.create = () => createScreen("home"); I.invite = () => inviteScreen("invite"); I.empty = () => emptyScreen("picks"); I.error = () => errorScreen("invite");
+
+/* ------------------------------- wiring ------------------------------- */
+const R = { G, H, I };
+const SCREENS = [["home","League Home"],["picks","Make Picks"],["standings","Standings"],["create","Create League"],["invite","Invite / Join"],["empty","Empty State"],["error","Error States"]];
+const VARIANTS = [["G","Gameday","refined D · focused"],["H","Scoreboard","sports-app · competition"],["I","Streaks","motivational"]];
+let curScreen = "picks", curVariant = "G";
+const app = document.getElementById("app");
+const vlabel = document.getElementById("vlabel");
+const screenSeg = document.getElementById("screenSeg");
+function buildScreenSeg(){ screenSeg.innerHTML = SCREENS.map(([k,l])=>`<button data-screen="${k}" aria-current="${curScreen===k}">${l}</button>`).join(""); }
+function render(){
+  app.dataset.variant = curVariant;
+  const fn = R[curVariant][curScreen] || R[curVariant].home;
+  app.innerHTML = fn();
+  const v = VARIANTS.find(v=>v[0]===curVariant);
+  vlabel.innerHTML = `${v[0]} — ${v[1]} <span>· ${v[2]}</span>`;
+  buildScreenSeg();
+  const url = new URL(location); url.searchParams.set("variant",curVariant); url.searchParams.set("screen",curScreen); history.replaceState(null,"",url);
+}
+function setScreen(s){ curScreen=s; render(); window.scrollTo(0,0); }
+function cycleVariant(d){ const i=VARIANTS.findIndex(v=>v[0]===curVariant); curVariant=VARIANTS[(i+d+VARIANTS.length)%VARIANTS.length][0]; render(); }
+document.addEventListener("click",(e)=>{
+  const scr = e.target.closest("[data-screen]"); if (scr){ e.preventDefault(); setScreen(scr.dataset.screen); return; }
+  const pick = e.target.closest("[data-pick]"); if (pick){ const g=GAMES.find(x=>x.id==pick.dataset.pick); g.pick=(g.pick===pick.dataset.team)?null:pick.dataset.team; render(); }
+});
+document.addEventListener("input",(e)=>{ if (e.target.matches("[data-mnf]")) mnfGuess=e.target.value; });
+document.getElementById("prevV").onclick=()=>cycleVariant(-1);
+document.getElementById("nextV").onclick=()=>cycleVariant(1);
+document.addEventListener("keydown",(e)=>{ const t=e.target.tagName; if (t==="INPUT"||t==="TEXTAREA"||e.target.isContentEditable) return; if (e.key==="ArrowLeft") cycleVariant(-1); if (e.key==="ArrowRight") cycleVariant(1); });
+document.getElementById("themeToggle").onclick=()=>{ const cur=document.documentElement.getAttribute("data-theme"); const next = cur==="dark"?"light":cur==="light"?"dark":(matchMedia("(prefers-color-scheme: dark)").matches?"light":"dark"); document.documentElement.setAttribute("data-theme", next); };
+const p = new URL(location).searchParams;
+if (p.get("variant") && R[p.get("variant")]) curVariant=p.get("variant");
+if (p.get("screen") && SCREENS.some(s=>s[0]===p.get("screen"))) curScreen=p.get("screen");
+render();
+</script>
