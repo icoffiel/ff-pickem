@@ -1,0 +1,31 @@
+# dependencies
+/node_modules
+
+# next.js
+/.next/
+/out/
+next-env.d.ts
+
+# convex
+convex/_generated
+
+# production
+/build
+
+# env
+.env
+.env*.local
+
+# testing
+/coverage
+
+# typescript incremental build info
+*.tsbuildinfo
+
+# claude code local state (worktrees, settings)
+.claude/
+
+# misc
+.DS_Store
+*.pem
+npm-debug.log*
