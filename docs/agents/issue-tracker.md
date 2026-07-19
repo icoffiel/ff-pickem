@@ -13,6 +13,21 @@ Issues and PRDs for this repo live as GitHub issues. Use the `gh` CLI for all op
 
 Infer the repo from `git remote -v` — `gh` does this automatically when run inside a clone.
 
+## Closing issues from a PR
+
+**If a PR fully completes an issue, close it with a keyword.** Put `Closes #<n>` (or `Fixes` / `Resolves`) in the PR body, one per issue. GitHub then closes the issue on merge, so it never lingers as false open work.
+
+**If any step remains outside the merge, do _not_ use a keyword.** Reference the issue plainly instead — `Part of #<n>`, `Towards #<n>`, or a bare `#<n>` — and leave it open. Merging is not completion when completion needs a human.
+
+Steps that keep an issue open:
+
+- Provisioning an external account or service (Convex, Vercel, Resend).
+- Publishing DNS records, or anything with propagation lead time.
+- Setting a secret or environment variable in a dashboard.
+- A manual verification the automated suite does not cover.
+
+Where a PR does part of an issue, say which part in the body and leave the remaining acceptance criteria unchecked. An issue closes when its acceptance criteria are met — not when code that contributes to them merges.
+
 ## Pull requests as a triage surface
 
 **PRs as a request surface: no.** _(Set to `yes` if this repo treats external PRs as feature requests; `/triage` reads this flag.)_
