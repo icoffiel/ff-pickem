@@ -99,7 +99,9 @@ accounts are set up by a human:
   - The **only** variable configured in Vercel is `CONVEX_DEPLOY_KEY`
     (Production scope, encrypted), created via
     `npx convex deployment token create <name> --deployment <ref>`.
-  - **Outstanding:** the GitHub repo is **not yet connected** to the project, so
-    there is no auto-deploy on push and no PR previews — `vercel git connect`
-    fails until the Vercel GitHub App is authorized for `icoffiel/ff-pickem`.
-    Deploys are manual (`npx vercel deploy --prod`) until then.
+  - `icoffiel/ff-pickem` is **connected** via the Vercel GitHub App: pushes to
+    `main` deploy to production, and pull requests get preview deployments.
+  - The build command lives in `vercel.json`, **not** in the Vercel dashboard
+    (which still shows the `next build` default). Vercel reads `vercel.json`
+    from the commit being built, so any branch missing that file would build
+    without `convex deploy` — and would ship a frontend with no Convex URL.
