@@ -104,11 +104,34 @@ accounts are set up by a human:
   address ([Resend error reference](https://resend.com/docs/api-reference/errors)).
   A `.vercel.app` subdomain cannot be verified — SPF/DKIM require writing
   records into a DNS zone, and that zone belongs to Vercel.
-  - **M1 (auth) is unblocked**: build and test the magic-link flow against your
-    own email on `resend.dev`.
-  - **M2 (invites) is blocked**: inviting real league members means emailing
-    other people, which needs a verified domain. Buy one and complete this
-    issue before M2 — allow for DNS propagation lead time.
+  What this blocks is **narrow**: delivering real email to real third parties.
+  It is not a milestone blocker. The development path is the console transport
+  (#33, shipped) — the magic link is written to the server console instead of
+  sent, so any address (`alice@example.com`) can sign in locally:
+
+  ```sh
+  npx convex env set AUTH_EMAIL_TRANSPORT console
+  npx convex env set AUTH_EMAIL_FROM onboarding@resend.dev
+  ```
+
+  Start sign-in, then copy the `[auth] magic link for …` line out of the
+  `convex dev` output and open it. `console` is also the default when
+  `AUTH_EMAIL_TRANSPORT` is unset — **production must set `resend`
+  explicitly**, or links go to the deployment log instead of to users.
+  - **M1 (auth) is unblocked**: develop against the console transport; the
+    Resend transport is verified once against your own address on `resend.dev`.
+  - **M2 (invites) is unblocked too**: the send boundary is stubbed in tests
+    (see #17), so invite creation, supersession, email-binding, expiry and the
+    reactivate-not-duplicate branch are all buildable and testable without a
+    domain. M2's flows are driven end to end using the console transport.
+  - **A domain is needed only at go-live** — the first time a real league
+    member must receive a real invite in a real inbox. Allow for DNS
+    propagation lead time then, and complete #22 before that point.
+  - Untested shortcut worth five minutes when the Resend account is created:
+    whether plus-addressing (`you+alice@gmail.com`) satisfies Resend's
+    own-address check. If it does, real multi-recipient inbox testing is
+    available on the free tier with no domain at all. Confirm before relying
+    on it.
 - **Vercel Hobby** (M0d, issue #25) — project `icoffiels-projects/ff-pickem`,
   live at [ff-pickem.vercel.app](https://ff-pickem.vercel.app). No custom domain
   (deferred to go-live).

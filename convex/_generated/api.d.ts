@@ -8,6 +8,8 @@
  * @module
  */
 
+import type * as auth from "../auth.js";
+import type * as emailTransport from "../emailTransport.js";
 import type * as ping from "../ping.js";
 
 import type {
@@ -17,6 +19,8 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  auth: typeof auth;
+  emailTransport: typeof emailTransport;
   ping: typeof ping;
 }>;
 
