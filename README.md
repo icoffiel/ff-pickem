@@ -106,8 +106,18 @@ accounts are set up by a human:
   records into a DNS zone, and that zone belongs to Vercel.
   What this blocks is **narrow**: delivering real email to real third parties.
   It is not a milestone blocker. The development path is the console transport
-  from #33 — the magic link is written to the server console instead of sent,
-  so any address (`alice@example.com`) can sign in locally.
+  (#33, shipped) — the magic link is written to the server console instead of
+  sent, so any address (`alice@example.com`) can sign in locally:
+
+  ```sh
+  npx convex env set AUTH_EMAIL_TRANSPORT console
+  npx convex env set AUTH_EMAIL_FROM onboarding@resend.dev
+  ```
+
+  Start sign-in, then copy the `[auth] magic link for …` line out of the
+  `convex dev` output and open it. `console` is also the default when
+  `AUTH_EMAIL_TRANSPORT` is unset — **production must set `resend`
+  explicitly**, or links go to the deployment log instead of to users.
   - **M1 (auth) is unblocked**: develop against the console transport; the
     Resend transport is verified once against your own address on `resend.dev`.
   - **M2 (invites) is unblocked too**: the send boundary is stubbed in tests
