@@ -40,10 +40,12 @@ export const consoleTransport =
 export const resendTransport =
   (apiKey: string, fetchImpl: typeof fetch = fetch): EmailTransport =>
   async ({ to, from, url }) => {
+    // Trim at the header boundary: a value set via `npx convex env set` keeps a
+    // trailing \r, and `Bearer re_...\r` is an unparseable header value (#40).
     const response = await fetchImpl("https://api.resend.com/emails", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey.trim()}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -72,7 +74,9 @@ export function resolveTransport(
     case "console":
       return consoleTransport();
     case "resend":
-      if (!apiKey) {
+      // A whitespace-only key (e.g. a stray \r) is "not configured": fail with a
+      // named error rather than handing `fetch` a `Bearer \r` header (#40).
+      if (!apiKey?.trim()) {
         throw new Error(
           "RESEND_API_KEY is not set — required by the resend transport",
         );
@@ -88,7 +92,9 @@ export function resolveTransport(
 /** The `from` address, always read from configuration — never hardcoded, so
  * the #22 domain swap is an env change. */
 export function senderAddress(env: Record<string, string | undefined>): string {
-  const from = env.AUTH_EMAIL_FROM;
+  // Trim at the config-read boundary so no stray \r reaches the JSON body; an
+  // all-whitespace value is treated the same as unset (#40).
+  const from = env.AUTH_EMAIL_FROM?.trim();
   if (!from) {
     throw new Error(
       "AUTH_EMAIL_FROM is not set — the magic-link sender address must be configured",
