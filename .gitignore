@@ -25,6 +25,12 @@ next-env.d.ts
 # testing
 /coverage
 
+# playwright e2e
+/test-results/
+/playwright-report/
+/playwright/.cache/
+/e2e/.artifacts/
+
 # typescript incremental build info
 *.tsbuildinfo
 

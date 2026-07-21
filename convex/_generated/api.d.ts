@@ -10,7 +10,8 @@
 
 import type * as auth from "../auth.js";
 import type * as emailTransport from "../emailTransport.js";
-import type * as ping from "../ping.js";
+import type * as http from "../http.js";
+import type * as users from "../users.js";
 
 import type {
   ApiFromModules,
@@ -21,7 +22,8 @@ import type {
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   emailTransport: typeof emailTransport;
-  ping: typeof ping;
+  http: typeof http;
+  users: typeof users;
 }>;
 
 /**
