@@ -23,7 +23,7 @@ functions at runtime:
 | Tier | Browser URL | Convex deployment | `SITE_URL` value | How `SITE_URL` is set |
 | --- | --- | --- | --- | --- |
 | **dev** (local) | `http://localhost:3000` | `hidden-reindeer-734` | `http://localhost:3000` | `npx convex env set` (once) |
-| **prod** | `https://ff-pickem-icoffiels-projects.vercel.app` | `majestic-dalmatian-467` | `https://ff-pickem-icoffiels-projects.vercel.app` | `npx convex env set --prod` (static; prod URL is stable) |
+| **prod** | `https://ff-pickem.vercel.app` | `majestic-dalmatian-467` | `https://ff-pickem.vercel.app` | `npx convex env set --prod` (static; prod URL is stable) |
 | **preview** (per branch) | `https://ff-pickem-git-<branch>-icoffiels-projects.vercel.app` | per-branch `*.convex.cloud` | dynamic per branch | **deferred** — see below |
 
 ## `SITE_URL` strategy
@@ -32,6 +32,12 @@ functions at runtime:
 link is built from it. Prod's URL is stable, so a single static value works and
 is set directly on the prod deployment. Preview URLs are dynamic per branch, so
 a static value cannot work there — that case is deferred (below).
+
+**It must be the *assigned* production domain (`ff-pickem.vercel.app`), not the
+*generated* project alias (`ff-pickem-icoffiels-projects.vercel.app`).** Under
+Vercel's Standard Protection the generated alias is gated behind Vercel SSO
+while the assigned domain is public (see below), so pointing `SITE_URL` at the
+alias would send every invitee's magic link to a login wall they can't pass.
 
 ## Delivery (transport) decision
 
@@ -73,16 +79,25 @@ to #30, the L3 CI gate). Captured plan for when it is picked up:
   keypair vs per-deployment, and how `JWT_PRIVATE_KEY`/`JWKS` reach them (Convex
   dashboard "Preview default environment variables"?).
 
-## Known blocker: Vercel Deployment Protection
+## Vercel Deployment Protection — which URLs are gated
 
-As of 2026-07-21 the prod URL 302-redirects to `vercel.com/sso-api?url=…`, i.e.
-**Vercel Authentication (Deployment Protection) is enabled** on the project. The
-app is therefore **not reachable — or shareable — without a Vercel login**, and
-a real browser sign-in cannot complete until it is disabled.
+The project has Vercel **Standard Protection** enabled. Verified anonymously
+(no cookies) on 2026-07-21:
 
-The Convex auth backend is fully configured and verified independent of this
-gate (see below); turning the protection off is a Vercel dashboard setting
-(Project → Settings → Deployment Protection) owned by the project owner.
+| URL | Type | Anonymous result |
+| --- | --- | --- |
+| `https://ff-pickem.vercel.app` | **assigned production domain** | **200 — public** |
+| `https://ff-pickem-icoffiels-projects.vercel.app` | generated project alias | 302 → `vercel.com/sso-api` (gated) |
+| `https://ff-pickem-git-<branch>-…vercel.app` | generated git/preview alias | 302 → gated |
+
+Standard Protection gates the *generated* deployment URLs but leaves the
+*assigned* production domain public — so the app **is** shareable via
+`ff-pickem.vercel.app`, and previews stay protected (which is the desired
+default). The practical rule this imposes: **`SITE_URL` and any shared link must
+use `ff-pickem.vercel.app`, never the generated alias**, or the recipient hits
+the SSO wall. Signed-in-to-Vercel operators pass the alias gate transparently,
+which is why the gate is invisible when the owner tests the alias in their own
+browser.
 
 ## Verifying prod auth (backend, no frontend needed)
 
@@ -95,8 +110,8 @@ npx convex run --prod 'auth:signIn' '{"provider":"email","params":{"email":"you@
 ```
 
 A correctly configured deployment logs
-`[auth] magic link for you@example.com: https://ff-pickem-icoffiels-projects.vercel.app/?code=…`
-— the prod origin proves `SITE_URL`, the log line proves `console` transport,
+`[auth] magic link for you@example.com: https://ff-pickem.vercel.app/?code=…`
+— the public prod origin proves `SITE_URL`, the log line proves `console` transport,
 and reaching the transport at all proves `AUTH_EMAIL_FROM` is set. A
 misconfigured deployment instead throws `Missing environment variable SITE_URL`
 at the `signIn` action. (This creates only a short-lived verification code, not
