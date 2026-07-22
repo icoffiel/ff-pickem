@@ -1,0 +1,21 @@
+# Line-ending policy: LF is canonical, in the repo and the working tree.
+#
+# The repo already stores every text file as LF. Without this file, a
+# checkout on a machine with core.autocrlf=true (the Git-for-Windows
+# default) rewrites the working tree to CRLF. Convex then regenerates
+# convex/_generated/*.ts as LF, and that working-LF-vs-expected-CRLF
+# mismatch shows up as a phantom "modified" api.d.ts (identical content,
+# only the line-ending expectation differs). Pinning eol=lf removes the
+# dependence on each machine's core.autocrlf and stops the churn.
+* text=auto eol=lf
+
+# Known binaries — never apply line-ending conversion (belt-and-suspenders;
+# `text=auto` already auto-detects, these just make intent explicit).
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.pem  binary
+*.woff  binary
+*.woff2 binary
