@@ -21,7 +21,9 @@ export async function waitForMagicLink(
       // The log wraps the message in quotes (`[LOG] '...url'`), so stop at the
       // first quote/whitespace rather than dragging the closing quote into the
       // code param.
-      const url = line.slice(line.indexOf("http")).match(/^https?:\/\/[^\s'"]+/);
+      const url = line
+        .slice(line.indexOf("http"))
+        .match(/^https?:\/\/[^\s'"]+/);
       if (url) return url[0];
     }
     await new Promise((r) => setTimeout(r, 300));

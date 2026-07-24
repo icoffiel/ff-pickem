@@ -33,7 +33,7 @@ export function SignInForm() {
   }
 
   return (
-    <form onSubmit={onSubmit}>
+    <form onSubmit={(event) => void onSubmit(event)}>
       <label>
         Email
         <input

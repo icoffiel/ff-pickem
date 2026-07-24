@@ -4,7 +4,7 @@
 // even after a successful sign-in. `domain` must match the token issuer
 // (CONVEX_SITE_URL, the deployment's own `.convex.site` origin) and
 // `applicationID` its audience ("convex").
-export default {
+const authConfig = {
   providers: [
     {
       domain: process.env.CONVEX_SITE_URL,
@@ -12,3 +12,5 @@ export default {
     },
   ],
 };
+
+export default authConfig;

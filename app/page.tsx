@@ -36,7 +36,7 @@ function SignedIn() {
       <p>
         Signed in as <strong>{me?.email ?? "…"}</strong>
       </p>
-      <button onClick={() => signOut()}>Sign out</button>
+      <button onClick={() => void signOut()}>Sign out</button>
     </div>
   );
 }

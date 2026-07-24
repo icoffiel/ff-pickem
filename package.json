@@ -9,6 +9,10 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "test": "vitest run",
     "test:e2e": "playwright test"
   },
@@ -27,8 +31,13 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "convex-test": "^0.0.54",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.2.11",
+    "eslint-config-prettier": "^10.1.8",
     "npm-run-all2": "^8.0.4",
+    "prettier": "^3.9.6",
     "typescript": "^5.9.3",
+    "typescript-eslint": "^8.65.0",
     "vitest": "^4.1.10"
   }
 }
