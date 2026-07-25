@@ -30,7 +30,9 @@ async function generateSigningKey() {
   return {
     pem: `-----BEGIN PRIVATE KEY-----\n${base64.match(/.{1,64}/g)!.join("\n")}\n-----END PRIVATE KEY-----`,
     jwks: JSON.stringify({
-      keys: [{ use: "sig", ...(await crypto.subtle.exportKey("jwk", publicKey)) }],
+      keys: [
+        { use: "sig", ...(await crypto.subtle.exportKey("jwk", publicKey)) },
+      ],
     }),
   };
 }

@@ -33,7 +33,10 @@ describe("resendTransport", () => {
       return new Response('{"id":"re_123"}', { status: 200 });
     };
 
-    await resendTransport("re_test_key", fakeFetch as never)({
+    await resendTransport(
+      "re_test_key",
+      fakeFetch as never,
+    )({
       to: "alice@example.com",
       from: "noreply@example.com",
       url: "https://example.com/verify?token=abc123",
@@ -57,7 +60,10 @@ describe("resendTransport", () => {
       return new Response('{"id":"re_123"}', { status: 200 });
     };
 
-    await resendTransport("re_test_key\r", fakeFetch as never)({
+    await resendTransport(
+      "re_test_key\r",
+      fakeFetch as never,
+    )({
       to: "alice@example.com",
       from: "noreply@example.com",
       url: "https://example.com/verify?token=abc123",
@@ -72,7 +78,10 @@ describe("resendTransport", () => {
       new Response('{"message":"Domain not verified"}', { status: 403 });
 
     await expect(
-      resendTransport("re_test_key", fakeFetch as never)({
+      resendTransport(
+        "re_test_key",
+        fakeFetch as never,
+      )({
         to: "bob@example.com",
         from: "noreply@example.com",
         url: "https://example.com/verify?token=abc123",
@@ -110,9 +119,9 @@ describe("senderAddress", () => {
   });
 
   test("trims surrounding whitespace so no carriage return reaches the JSON body", () => {
-    expect(
-      senderAddress({ AUTH_EMAIL_FROM: "noreply@example.com\r" }),
-    ).toBe("noreply@example.com");
+    expect(senderAddress({ AUTH_EMAIL_FROM: "noreply@example.com\r" })).toBe(
+      "noreply@example.com",
+    );
   });
 
   test("fails with a named error when the sender is not configured", () => {

@@ -1,5 +1,10 @@
 import { spawn, spawnSync } from "node:child_process";
-import { createWriteStream, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  createWriteStream,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { ARTIFACT_DIR, CONVEX_LOG } from "./paths";
 
 // The magic-link e2e (#39) needs the link the console transport writes to the
@@ -35,7 +40,8 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   child.stderr!.pipe(out);
 
   await waitFor(
-    () => /Convex functions ready|ready!/i.test(readFileSync(CONVEX_LOG, "utf8")),
+    () =>
+      /Convex functions ready|ready!/i.test(readFileSync(CONVEX_LOG, "utf8")),
     120_000,
     "`convex dev` to finish its first push",
   );
