@@ -1,1 +1,18 @@
-{}
+{
+  "plugins": ["@ianvs/prettier-plugin-sort-imports"],
+  "importOrder": [
+    "<BUILTIN_MODULES>",
+    "",
+    "^(react|react-dom)$",
+    "^next(/.*)?$",
+    "",
+    "<THIRD_PARTY_MODULES>",
+    "",
+    "^(convex|@convex-dev)(/.*)?$",
+    "",
+    "^@/",
+    "",
+    "^[./]"
+  ],
+  "importOrderParserPlugins": ["typescript", "jsx"]
+}

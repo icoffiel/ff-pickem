@@ -2,6 +2,7 @@
 // import — verified against the installed 0.0.94 build.
 import { Email } from "@convex-dev/auth/providers/Email";
 import { convexAuth } from "@convex-dev/auth/server";
+
 import { resolveTransport, senderAddress } from "./emailTransport";
 
 // Magic-link auth (#16). Delivery goes through the transport seam (#33) so

@@ -5,6 +5,7 @@ import {
   readFileSync,
   writeFileSync,
 } from "node:fs";
+
 import { ARTIFACT_DIR, CONVEX_LOG } from "./paths";
 
 // The magic-link e2e (#39) needs the link the console transport writes to the

@@ -96,4 +96,5 @@ Three tickets, ordered by dependency:
 
 - Biome (reconsider only if the ESLint setup proves too heavy).
 - `recommendedTypeChecked` / the `no-unsafe-*` family (escalation if a real gap appears).
-- Editor-integration config (`.vscode/`), import-sorting plugins, and any house Prettier overrides — add lazily if wanted.
+- Editor-integration config (`.vscode/`) — add lazily if wanted.
+- ~~Import-sorting plugins and any house Prettier overrides~~ — **implemented in L4 (#51):** `@ianvs/prettier-plugin-sort-imports` registered in `.prettierrc` with an `importOrder` (the first house Prettier override), so import order self-heals on every `format` run and the L2 pre-commit hook.

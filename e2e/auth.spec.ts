@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+
 import { waitForMagicLink } from "./magic-link";
 
 // M1b (#39): auth reachable from a browser. Drives the whole loop a person
