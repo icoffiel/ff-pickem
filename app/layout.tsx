@@ -1,6 +1,8 @@
-import type { Metadata } from "next";
-import { ConvexAuthNextjsServerProvider } from "@convex-dev/auth/nextjs/server";
 import { ReactNode } from "react";
+import type { Metadata } from "next";
+
+import { ConvexAuthNextjsServerProvider } from "@convex-dev/auth/nextjs/server";
+
 import { ConvexClientProvider } from "./ConvexClientProvider";
 
 export const metadata: Metadata = {

@@ -1,7 +1,8 @@
 "use client";
 
-import { useAuthActions } from "@convex-dev/auth/react";
 import { FormEvent, useState } from "react";
+
+import { useAuthActions } from "@convex-dev/auth/react";
 
 // The signed-out view (#39): an email field that starts magic-link sign-in.
 // Deliberately unstyled — the visual pass is M6 (#21). This only proves the

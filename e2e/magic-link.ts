@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+
 import { CONVEX_LOG } from "./paths";
 
 // The console transport writes `[auth] magic link for <email>: <url>` to the

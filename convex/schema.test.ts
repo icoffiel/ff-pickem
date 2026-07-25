@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
+
 import schema from "./schema";
 
 // Schema-level tests (issue #16). These assert *our* validators — the embedded

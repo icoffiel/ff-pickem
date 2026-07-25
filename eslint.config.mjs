@@ -1,8 +1,8 @@
-import { defineConfig, globalIgnores } from "eslint/config";
 import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
 import nextTypescript from "eslint-config-next/typescript";
-import tseslint from "typescript-eslint";
 import eslintConfigPrettier from "eslint-config-prettier";
+import { defineConfig, globalIgnores } from "eslint/config";
+import tseslint from "typescript-eslint";
 
 // Flat config (ESLint 9). Design: docs/design/linting.md.
 // ESLint judges code; Prettier judges layout (eslint-config-prettier spread last).

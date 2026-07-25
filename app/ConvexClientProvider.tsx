@@ -1,8 +1,9 @@
 "use client";
 
+import { ReactNode } from "react";
+
 import { ConvexAuthNextjsProvider } from "@convex-dev/auth/nextjs";
 import { ConvexReactClient } from "convex/react";
-import { ReactNode } from "react";
 
 // The auth-aware Convex provider (#39). Replaces the plain `ConvexProvider`
 // from M0 (#23) so `useAuthActions` and the `Authenticated`/`Unauthenticated`
