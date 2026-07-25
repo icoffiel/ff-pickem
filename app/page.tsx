@@ -9,6 +9,7 @@ import {
 } from "convex/react";
 
 import { api } from "../convex/_generated/api";
+import { CreateLeagueForm } from "./CreateLeagueForm";
 import { SignInForm } from "./SignInForm";
 
 export default function Page() {
@@ -38,6 +39,33 @@ function SignedIn() {
         Signed in as <strong>{me?.email ?? "…"}</strong>
       </p>
       <button onClick={() => void signOut()}>Sign out</button>
+      <MyLeagues />
+      <CreateLeagueForm />
     </div>
+  );
+}
+
+function MyLeagues() {
+  const leagues = useQuery(api.leagues.myLeagues);
+
+  if (leagues === undefined) {
+    return <p>Loading your leagues…</p>;
+  }
+
+  return (
+    <section>
+      <h2>My leagues</h2>
+      {leagues.length === 0 ? (
+        <p>You&apos;re not in any leagues yet. Create one below.</p>
+      ) : (
+        <ul>
+          {leagues.map((league) => (
+            <li key={league._id}>
+              {league.name} ({league.season})
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
