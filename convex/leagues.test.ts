@@ -26,7 +26,7 @@ test("createLeague makes the creator an active commissioner with their team name
 
   const leagueId = await as.mutation(api.leagues.createLeague, {
     name: "Family League",
-    teamName: "The Quifsters",
+    teamName: "Thunder Llamas",
   });
 
   const memberships = await t.run((ctx) =>
@@ -42,7 +42,7 @@ test("createLeague makes the creator an active commissioner with their team name
     leagueId,
     role: "commissioner",
     status: "active",
-    teamName: "The Quifsters",
+    teamName: "Thunder Llamas",
   });
   expect(memberships[0].joinedAt).toBeTypeOf("number");
 });
@@ -53,7 +53,7 @@ test("createLeague embeds the default rule-set and the configured season", async
 
   const leagueId = await as.mutation(api.leagues.createLeague, {
     name: "Family League",
-    teamName: "The Quifsters",
+    teamName: "Thunder Llamas",
   });
 
   const league = await t.run((ctx) => ctx.db.get(leagueId));
@@ -78,7 +78,7 @@ test("createLeague rejects an unauthenticated caller", async () => {
   await expect(
     t.mutation(api.leagues.createLeague, {
       name: "Family League",
-      teamName: "The Quifsters",
+      teamName: "Thunder Llamas",
     }),
   ).rejects.toThrow();
 
@@ -119,7 +119,7 @@ test("createLeague trims surrounding whitespace from name and team name", async 
 
   const leagueId = await as.mutation(api.leagues.createLeague, {
     name: "  Family League  ",
-    teamName: "  The Quifsters  ",
+    teamName: "  Thunder Llamas  ",
   });
 
   const league = await t.run((ctx) => ctx.db.get(leagueId));
@@ -131,7 +131,7 @@ test("createLeague trims surrounding whitespace from name and team name", async 
   );
 
   expect(league!.name).toBe("Family League");
-  expect(membership!.teamName).toBe("The Quifsters");
+  expect(membership!.teamName).toBe("Thunder Llamas");
 });
 
 test("createLeague rejects a blank name or team name", async () => {
@@ -141,7 +141,7 @@ test("createLeague rejects a blank name or team name", async () => {
   await expect(
     as.mutation(api.leagues.createLeague, {
       name: "   ",
-      teamName: "The Quifsters",
+      teamName: "Thunder Llamas",
     }),
   ).rejects.toThrow();
 
