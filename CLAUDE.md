@@ -12,6 +12,10 @@ The five canonical triage roles, each label string equal to its name. See `docs/
 
 Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
+### Linting & formatting
+
+Run `npm run lint` and `npm run format` while working (not just at the commit wall). A Husky pre-commit hook runs lint-staged (Prettier + `eslint --fix`) as a backstop. See `docs/design/linting.md`.
+
 <!-- convex-ai-start -->
 
 This project uses [Convex](https://convex.dev) as its backend.
