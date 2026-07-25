@@ -3,7 +3,8 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 // The 8 first-class league settings (#5). First loop ships one default each.
-const rules = v.object({
+// Exported so `config.ts` can single-source the default rule-set's type.
+export const rules = v.object({
   lock: v.union(v.literal("weekly"), v.literal("perGame")),
   slate: v.union(
     v.literal("saturdaySundayMonday"), // default
