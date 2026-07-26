@@ -4,7 +4,7 @@ import { FormEvent, useState } from "react";
 
 import { useMutation } from "convex/react";
 
-import { api } from "../convex/_generated/api";
+import { api } from "@/convex/_generated/api";
 
 // The signed-in create-league form (M2a, #58): a league name + the creator's
 // own team name. On submit the caller is born the league's commissioner.
