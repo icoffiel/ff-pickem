@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { useAuthActions } from "@convex-dev/auth/react";
 import {
   Authenticated,
@@ -61,7 +63,9 @@ function MyLeagues() {
         <ul>
           {leagues.map((league) => (
             <li key={league._id}>
-              {league.name} ({league.season})
+              <Link href={`/leagues/${league._id}`}>
+                {league.name} ({league.season})
+              </Link>
             </li>
           ))}
         </ul>

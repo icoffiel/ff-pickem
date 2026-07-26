@@ -12,6 +12,8 @@ import type * as auth from "../auth.js";
 import type * as config from "../config.js";
 import type * as emailTransport from "../emailTransport.js";
 import type * as http from "../http.js";
+import type * as inviteEmail from "../inviteEmail.js";
+import type * as invites from "../invites.js";
 import type * as leagues from "../leagues.js";
 import type * as users from "../users.js";
 
@@ -26,6 +28,8 @@ declare const fullApi: ApiFromModules<{
   config: typeof config;
   emailTransport: typeof emailTransport;
   http: typeof http;
+  inviteEmail: typeof inviteEmail;
+  invites: typeof invites;
   leagues: typeof leagues;
   users: typeof users;
 }>;
