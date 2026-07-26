@@ -14,14 +14,26 @@ function normalizeEmail(email: string): string {
 }
 
 /**
- * Whether an invite can still be walked through the door right now. Expiry is
- * lazy — checked against `now` at read time, with no cron flipping statuses —
- * so this is the one place "live invite" is defined, shared by every reader.
+ * Time as a query argument, never a wall-clock read inside the query.
+ *
+ * A Convex query is only re-run when the data it reads changes, so a `Date.now()`
+ * inside one silently goes stale, and it churns the query cache besides
+ * (https://docs.convex.dev/understanding/best-practices/#date-in-queries).
+ * Callers pass the time floored to the minute so every request within a minute
+ * shares one cache entry.
+ *
+ * This is display-only authority: a caller who passes a stale `now` can make an
+ * expired invite look live *on their own screen*, and `redeem` — a mutation,
+ * where reading the clock is fine — still refuses it.
  */
-export function isRedeemable(
-  invite: Doc<"invites">,
-  now: number = Date.now(),
-): boolean {
+const NOW_ARG = { now: v.number() };
+
+/**
+ * Whether an invite can still be walked through the door at `now`. Expiry is
+ * lazy — checked at read time, with no cron flipping statuses — so this is the
+ * one place "live invite" is defined, shared by every reader.
+ */
+export function isRedeemable(invite: Doc<"invites">, now: number): boolean {
   return invite.status === "pending" && invite.expiresAt > now;
 }
 
@@ -138,7 +150,9 @@ export const redeem = mutation({
     if (invite === null) {
       throw new ConvexError({ code: "InviteNotFound" });
     }
-    if (!isRedeemable(invite)) {
+    // A mutation is not a subscription, so the server clock is the authority
+    // here — this is the check that actually gates joining.
+    if (!isRedeemable(invite, Date.now())) {
       throw new ConvexError({ code: "InviteExpired" });
     }
 
@@ -189,10 +203,12 @@ export const redeem = mutation({
  * by the caller's own email — never by a token — so this is safe to render on
  * the home screen, and it is also what the accept page reads to name the league
  * behind a token. Returns `[]` for a signed-out caller.
+ *
+ * `now` comes from the caller (see `NOW_ARG`).
  */
 export const myPendingInvites = query({
-  args: {},
-  handler: async (ctx) => {
+  args: NOW_ARG,
+  handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (userId === null) {
       return [];
@@ -209,9 +225,8 @@ export const myPendingInvites = query({
       )
       .collect();
 
-    const now = Date.now();
     const live = await Promise.all(
-      invites.filter((i) => isRedeemable(i, now)).map(withLeagueName(ctx)),
+      invites.filter((i) => isRedeemable(i, args.now)).map(withLeagueName(ctx)),
     );
     return live.filter((invite) => invite !== null);
   },
@@ -240,7 +255,7 @@ function withLeagueName(ctx: QueryCtx) {
  * expired at read time, with no cron flipping its status.
  */
 export const leagueRoster = query({
-  args: { leagueId: v.id("leagues") },
+  args: { leagueId: v.id("leagues"), ...NOW_ARG },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (userId === null) {
@@ -269,13 +284,12 @@ export const leagueRoster = query({
       return { members };
     }
 
-    const now = Date.now();
     const invites = await ctx.db
       .query("invites")
       .withIndex("by_league_email", (q) => q.eq("leagueId", args.leagueId))
       .collect();
     const pendingInvites = invites
-      .filter((i) => isRedeemable(i, now))
+      .filter((i) => isRedeemable(i, args.now))
       .map((i) => ({ targetEmail: i.targetEmail, expiresAt: i.expiresAt }));
 
     return { members, pendingInvites };

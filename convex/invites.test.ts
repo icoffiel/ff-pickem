@@ -446,7 +446,9 @@ test("myPendingInvites surfaces the caller's live invite with its league name", 
   const t = convexTest(schema, modules);
   const { leagueId, token, invitee } = await withInvite(t);
 
-  const invites = await invitee.as.query(api.invites.myPendingInvites);
+  const invites = await invitee.as.query(api.invites.myPendingInvites, {
+    now: Date.now(),
+  });
 
   expect(invites).toEqual([
     expect.objectContaining({ token, leagueId, leagueName: "Family League" }),
@@ -458,14 +460,18 @@ test("myPendingInvites shows nothing to a different email", async () => {
   await withInvite(t);
   const bystander = await signedIn(t, "bystander@example.com");
 
-  expect(await bystander.as.query(api.invites.myPendingInvites)).toEqual([]);
+  expect(
+    await bystander.as.query(api.invites.myPendingInvites, { now: Date.now() }),
+  ).toEqual([]);
 });
 
 test("myPendingInvites shows nothing to a signed-out visitor", async () => {
   const t = convexTest(schema, modules);
   await withInvite(t);
 
-  expect(await t.query(api.invites.myPendingInvites)).toEqual([]);
+  expect(
+    await t.query(api.invites.myPendingInvites, { now: Date.now() }),
+  ).toEqual([]);
 });
 
 test("myPendingInvites drops an invite once it expires", async () => {
@@ -473,7 +479,29 @@ test("myPendingInvites drops an invite once it expires", async () => {
   const { invitee } = await withInvite(t);
   await patchOnlyInvite(t, { expiresAt: Date.now() - 1 });
 
-  expect(await invitee.as.query(api.invites.myPendingInvites)).toEqual([]);
+  expect(
+    await invitee.as.query(api.invites.myPendingInvites, { now: Date.now() }),
+  ).toEqual([]);
+});
+
+// Time is an argument, not a wall-clock read, so the query is re-run when its
+// data changes rather than going quietly stale
+// (https://docs.convex.dev/understanding/best-practices/#date-in-queries).
+// This pins that the passed time is what decides liveness.
+test("myPendingInvites judges expiry against the time it is given", async () => {
+  const t = convexTest(schema, modules);
+  const { invitee } = await withInvite(t);
+  const expiresAt = Date.now() - 60_000;
+  await patchOnlyInvite(t, { expiresAt });
+
+  expect(
+    await invitee.as.query(api.invites.myPendingInvites, {
+      now: expiresAt - 1,
+    }),
+  ).toHaveLength(1);
+  expect(
+    await invitee.as.query(api.invites.myPendingInvites, { now: expiresAt }),
+  ).toEqual([]);
 });
 
 test("myPendingInvites drops an invite once it is redeemed", async () => {
@@ -484,7 +512,9 @@ test("myPendingInvites drops an invite once it is redeemed", async () => {
     teamName: "Gridiron Geese",
   });
 
-  expect(await invitee.as.query(api.invites.myPendingInvites)).toEqual([]);
+  expect(
+    await invitee.as.query(api.invites.myPendingInvites, { now: Date.now() }),
+  ).toEqual([]);
 });
 
 test("leagueRoster rejects a caller who is not a member of the league", async () => {
@@ -493,7 +523,7 @@ test("leagueRoster rejects a caller who is not a member of the league", async ()
   const outsider = await signedIn(t, "outsider@example.com");
 
   await expect(
-    outsider.as.query(api.invites.leagueRoster, { leagueId }),
+    outsider.as.query(api.invites.leagueRoster, { leagueId, now: Date.now() }),
   ).rejects.toThrow(/NotMember/);
 });
 
@@ -503,7 +533,10 @@ test("leagueRoster returns the member roster to a member", async () => {
   const memberId = await addMember(t, leagueId, "member@example.com");
   const asMember = t.withIdentity({ subject: `${memberId}|session` });
 
-  const roster = await asMember.query(api.invites.leagueRoster, { leagueId });
+  const roster = await asMember.query(api.invites.leagueRoster, {
+    leagueId,
+    now: Date.now(),
+  });
 
   expect(roster.members).toEqual(
     expect.arrayContaining([
@@ -530,7 +563,10 @@ test("leagueRoster hides pending invites from a non-commissioner member", async 
   const memberId = await addMember(t, leagueId, "member@example.com");
   const asMember = t.withIdentity({ subject: `${memberId}|session` });
 
-  const roster = await asMember.query(api.invites.leagueRoster, { leagueId });
+  const roster = await asMember.query(api.invites.leagueRoster, {
+    leagueId,
+    now: Date.now(),
+  });
 
   expect(roster.pendingInvites).toBeUndefined();
 });
@@ -543,7 +579,10 @@ test("leagueRoster returns pending invites to the commissioner", async () => {
     email: "sister@example.com",
   });
 
-  const roster = await as.query(api.invites.leagueRoster, { leagueId });
+  const roster = await as.query(api.invites.leagueRoster, {
+    leagueId,
+    now: Date.now(),
+  });
 
   expect(roster.pendingInvites).toEqual([
     expect.objectContaining({ targetEmail: "sister@example.com" }),
@@ -563,7 +602,10 @@ test("leagueRoster omits expired pending invites from the commissioner's view", 
     await ctx.db.patch(invite!._id, { expiresAt: Date.now() - 1 });
   });
 
-  const roster = await as.query(api.invites.leagueRoster, { leagueId });
+  const roster = await as.query(api.invites.leagueRoster, {
+    leagueId,
+    now: Date.now(),
+  });
 
   expect(roster.pendingInvites).toEqual([]);
 });

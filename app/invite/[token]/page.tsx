@@ -13,6 +13,7 @@ import {
 } from "convex/react";
 import { ConvexError } from "convex/values";
 
+import { currentMinute } from "@/app/currentMinute";
 import { SignInForm } from "@/app/SignInForm";
 import { api } from "@/convex/_generated/api";
 
@@ -50,7 +51,9 @@ export default function InvitePage({
 }
 
 function AcceptInvite({ token }: { token: string }) {
-  const invites = useQuery(api.invites.myPendingInvites);
+  const invites = useQuery(api.invites.myPendingInvites, {
+    now: currentMinute(),
+  });
 
   if (invites === undefined) {
     return <p>Checking your invite…</p>;

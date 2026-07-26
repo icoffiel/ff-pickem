@@ -13,6 +13,7 @@ import {
 import { api } from "@/convex/_generated/api";
 
 import { CreateLeagueForm } from "./CreateLeagueForm";
+import { currentMinute } from "./currentMinute";
 import { SignInForm } from "./SignInForm";
 
 export default function Page() {
@@ -51,7 +52,9 @@ function SignedIn() {
 
 // Someone who lost the emailed link can still find their way in from here (#60).
 function PendingInvites() {
-  const invites = useQuery(api.invites.myPendingInvites);
+  const invites = useQuery(api.invites.myPendingInvites, {
+    now: currentMinute(),
+  });
 
   if (invites === undefined || invites.length === 0) {
     return null;
