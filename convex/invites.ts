@@ -2,7 +2,8 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 
 import { internal } from "./_generated/api";
-import { mutation, query } from "./_generated/server";
+import { Doc } from "./_generated/dataModel";
+import { mutation, query, QueryCtx } from "./_generated/server";
 
 const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000;
 
@@ -10,6 +11,18 @@ const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000;
  * "Sister@Example.com " and "sister@example.com" are one address (see #50). */
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
+}
+
+/**
+ * Whether an invite can still be walked through the door right now. Expiry is
+ * lazy — checked against `now` at read time, with no cron flipping statuses —
+ * so this is the one place "live invite" is defined, shared by every reader.
+ */
+export function isRedeemable(
+  invite: Doc<"invites">,
+  now: number = Date.now(),
+): boolean {
+  return invite.status === "pending" && invite.expiresAt > now;
 }
 
 /**
@@ -97,6 +110,129 @@ export const createInvite = mutation({
 });
 
 /**
+ * Redeem an invite: become an active, competing member of its league.
+ *
+ * The **email binding is the security boundary**, not the token: the token is
+ * only a deep-link, so redemption requires the signed-in caller's email to be
+ * the invited one. A dead link (expired, superseded, revoked, already accepted)
+ * refuses with a single `InviteExpired` — the invitee's answer is "ask for a
+ * fresh invite" in every one of those cases.
+ */
+export const redeem = mutation({
+  args: { token: v.string(), teamName: v.string() },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) {
+      throw new ConvexError({ code: "NotSignedIn" });
+    }
+
+    const teamName = args.teamName.trim();
+    if (teamName === "") {
+      throw new ConvexError({ code: "EmptyField" });
+    }
+
+    const invite = await ctx.db
+      .query("invites")
+      .withIndex("by_token", (q) => q.eq("token", args.token))
+      .unique();
+    if (invite === null) {
+      throw new ConvexError({ code: "InviteNotFound" });
+    }
+    if (!isRedeemable(invite)) {
+      throw new ConvexError({ code: "InviteExpired" });
+    }
+
+    const callerEmail = (await ctx.db.get(userId))?.email;
+    if (
+      callerEmail === undefined ||
+      normalizeEmail(callerEmail) !== invite.targetEmail
+    ) {
+      throw new ConvexError({ code: "EmailMismatch" });
+    }
+
+    // One membership per (user, league) — Convex has no partial-unique
+    // constraint, so this branch is what enforces it. It is also the single
+    // convergence point for "un-remove" and "accidental re-invite".
+    const existing = await ctx.db
+      .query("memberships")
+      .withIndex("by_league_user", (q) =>
+        q.eq("leagueId", invite.leagueId).eq("userId", userId),
+      )
+      .unique();
+    if (existing === null) {
+      await ctx.db.insert("memberships", {
+        userId,
+        leagueId: invite.leagueId,
+        role: "member",
+        status: "active",
+        teamName,
+        joinedAt: Date.now(),
+      });
+    } else if (existing.status === "removed") {
+      await ctx.db.patch(existing._id, {
+        status: "active",
+        removedAt: undefined,
+        teamName,
+      });
+    }
+    // An already-active membership is left untouched: a re-invite must never
+    // rename the team someone is already playing under.
+
+    await ctx.db.patch(invite._id, { status: "accepted" });
+
+    return invite.leagueId;
+  },
+});
+
+/**
+ * The live invites waiting for the signed-in caller, across every league. Scoped
+ * by the caller's own email — never by a token — so this is safe to render on
+ * the home screen, and it is also what the accept page reads to name the league
+ * behind a token. Returns `[]` for a signed-out caller.
+ */
+export const myPendingInvites = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (userId === null) {
+      return [];
+    }
+    const callerEmail = (await ctx.db.get(userId))?.email;
+    if (callerEmail === undefined) {
+      return [];
+    }
+
+    const invites = await ctx.db
+      .query("invites")
+      .withIndex("by_email", (q) =>
+        q.eq("targetEmail", normalizeEmail(callerEmail)),
+      )
+      .collect();
+
+    const now = Date.now();
+    const live = await Promise.all(
+      invites.filter((i) => isRedeemable(i, now)).map(withLeagueName(ctx)),
+    );
+    return live.filter((invite) => invite !== null);
+  },
+});
+
+/** An invite as the accept screen needs it — dropped if its league is gone. */
+function withLeagueName(ctx: QueryCtx) {
+  return async (invite: Doc<"invites">) => {
+    const league = await ctx.db.get(invite.leagueId);
+    return league === null
+      ? null
+      : {
+          token: invite.token,
+          leagueId: invite.leagueId,
+          leagueName: league.name,
+          expiresAt: invite.expiresAt,
+        };
+  };
+}
+
+/**
  * The roster of a league: its active members, plus — for a commissioner only —
  * the outstanding pending invites. Any member may see who is playing; only the
  * commissioner sees who has been invited but not yet joined (#59). Pending
@@ -139,7 +275,7 @@ export const leagueRoster = query({
       .withIndex("by_league_email", (q) => q.eq("leagueId", args.leagueId))
       .collect();
     const pendingInvites = invites
-      .filter((i) => i.status === "pending" && i.expiresAt > now)
+      .filter((i) => isRedeemable(i, now))
       .map((i) => ({ targetEmail: i.targetEmail, expiresAt: i.expiresAt }));
 
     return { members, pendingInvites };

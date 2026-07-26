@@ -42,9 +42,33 @@ function SignedIn() {
         Signed in as <strong>{me?.email ?? "…"}</strong>
       </p>
       <button onClick={() => void signOut()}>Sign out</button>
+      <PendingInvites />
       <MyLeagues />
       <CreateLeagueForm />
     </div>
+  );
+}
+
+// Someone who lost the emailed link can still find their way in from here (#60).
+function PendingInvites() {
+  const invites = useQuery(api.invites.myPendingInvites);
+
+  if (invites === undefined || invites.length === 0) {
+    return null;
+  }
+
+  return (
+    <section>
+      <h2>Your invitations</h2>
+      <ul>
+        {invites.map((invite) => (
+          <li key={invite.token}>
+            You&apos;re invited to {invite.leagueName} —{" "}
+            <Link href={`/invite/${invite.token}`}>Join</Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
