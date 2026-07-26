@@ -11,6 +11,7 @@ import {
   useQuery,
 } from "convex/react";
 
+import { currentMinute } from "@/app/currentMinute";
 import { SignInForm } from "@/app/SignInForm";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
@@ -46,7 +47,10 @@ export default function LeaguePage({
 }
 
 function Roster({ leagueId }: { leagueId: Id<"leagues"> }) {
-  const roster = useQuery(api.invites.leagueRoster, { leagueId });
+  const roster = useQuery(api.invites.leagueRoster, {
+    leagueId,
+    now: currentMinute(),
+  });
 
   if (roster === undefined) {
     return <p>Loading roster…</p>;

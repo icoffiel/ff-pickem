@@ -3,7 +3,8 @@ import { convexTest } from "convex-test";
 import { expect, test } from "vitest";
 
 import { api } from "./_generated/api";
-import { Id } from "./_generated/dataModel";
+import { Doc, Id } from "./_generated/dataModel";
+import { isRedeemable } from "./invites";
 import schema from "./schema";
 
 const modules = import.meta.glob("./**/*.ts");
@@ -36,7 +37,7 @@ async function withLeague(
   return { ...commish, leagueId };
 }
 
-/** Insert a membership directly — the redeem path (M2c) does not exist yet. */
+/** Insert a membership directly, bypassing the redeem path under test. */
 async function addMember(
   t: ReturnType<typeof convexTest>,
   leagueId: Id<"leagues">,
@@ -56,6 +57,70 @@ async function addMember(
     return userId;
   });
 }
+
+/** A league with a live invite out to `email`, plus that invitee signed in. */
+async function withInvite(
+  t: ReturnType<typeof convexTest>,
+  email = "sister@example.com",
+) {
+  const commish = await withLeague(t);
+  const { token } = (await commish.as.mutation(api.invites.createInvite, {
+    leagueId: commish.leagueId,
+    email,
+  })) as { status: "invited"; token: string };
+  const invitee = await signedIn(t, email);
+  return { leagueId: commish.leagueId, token, commish, invitee };
+}
+
+/** The sole invite row, for tests that need to age or re-status it. */
+async function patchOnlyInvite(
+  t: ReturnType<typeof convexTest>,
+  fields: Partial<Doc<"invites">>,
+) {
+  await t.run(async (ctx) => {
+    const invite = await ctx.db.query("invites").unique();
+    await ctx.db.patch(invite!._id, fields);
+  });
+}
+
+test("redeem makes the invitee a born-active member with their chosen team name", async () => {
+  const t = convexTest(schema, modules);
+  const { leagueId, token, invitee } = await withInvite(t);
+
+  const redeemedLeagueId = await invitee.as.mutation(api.invites.redeem, {
+    token,
+    teamName: "Gridiron Geese",
+  });
+
+  expect(redeemedLeagueId).toBe(leagueId);
+
+  const membership = await t.run((ctx) =>
+    ctx.db
+      .query("memberships")
+      .withIndex("by_league_user", (q) =>
+        q.eq("leagueId", leagueId).eq("userId", invitee.userId),
+      )
+      .unique(),
+  );
+  expect(membership).toMatchObject({
+    role: "member",
+    status: "active",
+    teamName: "Gridiron Geese",
+  });
+});
+
+test("redeem marks the invite accepted so the link cannot be reused", async () => {
+  const t = convexTest(schema, modules);
+  const { token, invitee } = await withInvite(t);
+
+  await invitee.as.mutation(api.invites.redeem, {
+    token,
+    teamName: "Gridiron Geese",
+  });
+
+  const invite = await t.run((ctx) => ctx.db.query("invites").unique());
+  expect(invite!.status).toBe("accepted");
+});
 
 test("createInvite creates a pending invite with a token and a ~14-day expiry", async () => {
   const t = convexTest(schema, modules);
@@ -203,13 +268,262 @@ test("createInvite schedules the invite email rather than sending inline", async
   });
 });
 
+test("redeem refuses a signed-in email that is not the invited one", async () => {
+  const t = convexTest(schema, modules);
+  const { leagueId, token } = await withInvite(t);
+  const wrongPerson = await signedIn(t, "stranger@example.com");
+
+  await expect(
+    wrongPerson.as.mutation(api.invites.redeem, {
+      token,
+      teamName: "Interlopers",
+    }),
+  ).rejects.toThrow(/EmailMismatch/);
+
+  const memberships = await t.run((ctx) =>
+    ctx.db
+      .query("memberships")
+      .withIndex("by_league", (q) => q.eq("leagueId", leagueId))
+      .collect(),
+  );
+  expect(memberships).toHaveLength(1); // the commissioner, and no one else
+});
+
+test("redeem refuses a token that matches no invite", async () => {
+  const t = convexTest(schema, modules);
+  const { invitee } = await withInvite(t);
+
+  await expect(
+    invitee.as.mutation(api.invites.redeem, {
+      token: "not-a-real-token",
+      teamName: "Gridiron Geese",
+    }),
+  ).rejects.toThrow(/InviteNotFound/);
+});
+
+test("redeem refuses a signed-out caller", async () => {
+  const t = convexTest(schema, modules);
+  const { token } = await withInvite(t);
+
+  await expect(
+    t.mutation(api.invites.redeem, { token, teamName: "Gridiron Geese" }),
+  ).rejects.toThrow(/NotSignedIn/);
+});
+
+test("redeem refuses an invite whose 14 days have run out", async () => {
+  const t = convexTest(schema, modules);
+  const { token, invitee } = await withInvite(t);
+  await patchOnlyInvite(t, { expiresAt: Date.now() - 1 });
+
+  await expect(
+    invitee.as.mutation(api.invites.redeem, {
+      token,
+      teamName: "Gridiron Geese",
+    }),
+  ).rejects.toThrow(/InviteExpired/);
+});
+
+// A superseded, revoked or already-accepted link is dead for the same reason an
+// expired one is — from the invitee's side there is nothing to distinguish, and
+// the answer is always "ask for a fresh invite", so they share one code.
+test.each(["superseded", "revoked", "accepted"] as const)(
+  "redeem refuses a %s invite",
+  async (status) => {
+    const t = convexTest(schema, modules);
+    const { token, invitee } = await withInvite(t);
+    await patchOnlyInvite(t, { status });
+
+    await expect(
+      invitee.as.mutation(api.invites.redeem, {
+        token,
+        teamName: "Gridiron Geese",
+      }),
+    ).rejects.toThrow(/InviteExpired/);
+  },
+);
+
+test("redeem restores a removed membership instead of duplicating it", async () => {
+  const t = convexTest(schema, modules);
+  const { leagueId, token, invitee } = await withInvite(t);
+  const removedAt = Date.now() - 1000;
+  await t.run((ctx) =>
+    ctx.db.insert("memberships", {
+      userId: invitee.userId,
+      leagueId,
+      role: "member",
+      status: "removed",
+      teamName: "Old Name",
+      joinedAt: removedAt - 1000,
+      removedAt,
+    }),
+  );
+
+  await invitee.as.mutation(api.invites.redeem, {
+    token,
+    teamName: "Gridiron Geese",
+  });
+
+  const memberships = await t.run((ctx) =>
+    ctx.db
+      .query("memberships")
+      .withIndex("by_league_user", (q) =>
+        q.eq("leagueId", leagueId).eq("userId", invitee.userId),
+      )
+      .collect(),
+  );
+  expect(memberships).toHaveLength(1);
+  expect(memberships[0]).toMatchObject({
+    status: "active",
+    teamName: "Gridiron Geese",
+  });
+  expect(memberships[0].removedAt).toBeUndefined();
+});
+
+test("redeem is a harmless no-op for someone who is already an active member", async () => {
+  const t = convexTest(schema, modules);
+  const { leagueId, token, invitee } = await withInvite(t);
+  await t.run((ctx) =>
+    ctx.db.insert("memberships", {
+      userId: invitee.userId,
+      leagueId,
+      role: "member",
+      status: "active",
+      teamName: "Existing Name",
+      joinedAt: Date.now() - 1000,
+    }),
+  );
+
+  const redeemedLeagueId = await invitee.as.mutation(api.invites.redeem, {
+    token,
+    teamName: "Gridiron Geese",
+  });
+
+  expect(redeemedLeagueId).toBe(leagueId);
+  const memberships = await t.run((ctx) =>
+    ctx.db
+      .query("memberships")
+      .withIndex("by_league_user", (q) =>
+        q.eq("leagueId", leagueId).eq("userId", invitee.userId),
+      )
+      .collect(),
+  );
+  expect(memberships).toHaveLength(1);
+  expect(memberships[0].teamName).toBe("Existing Name");
+});
+
+test("redeem refuses an empty team name", async () => {
+  const t = convexTest(schema, modules);
+  const { token, invitee } = await withInvite(t);
+
+  await expect(
+    invitee.as.mutation(api.invites.redeem, { token, teamName: "   " }),
+  ).rejects.toThrow(/EmptyField/);
+});
+
+// `isRedeemable` is the pure definition of "live invite" both readers share, so
+// it is pinned directly over (status, expiresAt, now) rather than only through
+// the mutation that persists the result.
+const anInvite = (fields: Partial<Doc<"invites">>) =>
+  ({ status: "pending", expiresAt: 1000, ...fields }) as Doc<"invites">;
+
+test("isRedeemable accepts a pending invite before its expiry", () => {
+  expect(isRedeemable(anInvite({}), 999)).toBe(true);
+});
+
+test("isRedeemable rejects a pending invite at and after its expiry", () => {
+  expect(isRedeemable(anInvite({}), 1000)).toBe(false);
+  expect(isRedeemable(anInvite({}), 1001)).toBe(false);
+});
+
+test.each(["accepted", "expired", "superseded", "revoked"] as const)(
+  "isRedeemable rejects a %s invite even before its expiry",
+  (status) => {
+    expect(isRedeemable(anInvite({ status }), 999)).toBe(false);
+  },
+);
+
+test("myPendingInvites surfaces the caller's live invite with its league name", async () => {
+  const t = convexTest(schema, modules);
+  const { leagueId, token, invitee } = await withInvite(t);
+
+  const invites = await invitee.as.query(api.invites.myPendingInvites, {
+    now: Date.now(),
+  });
+
+  expect(invites).toEqual([
+    expect.objectContaining({ token, leagueId, leagueName: "Family League" }),
+  ]);
+});
+
+test("myPendingInvites shows nothing to a different email", async () => {
+  const t = convexTest(schema, modules);
+  await withInvite(t);
+  const bystander = await signedIn(t, "bystander@example.com");
+
+  expect(
+    await bystander.as.query(api.invites.myPendingInvites, { now: Date.now() }),
+  ).toEqual([]);
+});
+
+test("myPendingInvites shows nothing to a signed-out visitor", async () => {
+  const t = convexTest(schema, modules);
+  await withInvite(t);
+
+  expect(
+    await t.query(api.invites.myPendingInvites, { now: Date.now() }),
+  ).toEqual([]);
+});
+
+test("myPendingInvites drops an invite once it expires", async () => {
+  const t = convexTest(schema, modules);
+  const { invitee } = await withInvite(t);
+  await patchOnlyInvite(t, { expiresAt: Date.now() - 1 });
+
+  expect(
+    await invitee.as.query(api.invites.myPendingInvites, { now: Date.now() }),
+  ).toEqual([]);
+});
+
+// Time is an argument, not a wall-clock read, so the query is re-run when its
+// data changes rather than going quietly stale
+// (https://docs.convex.dev/understanding/best-practices/#date-in-queries).
+// This pins that the passed time is what decides liveness.
+test("myPendingInvites judges expiry against the time it is given", async () => {
+  const t = convexTest(schema, modules);
+  const { invitee } = await withInvite(t);
+  const expiresAt = Date.now() - 60_000;
+  await patchOnlyInvite(t, { expiresAt });
+
+  expect(
+    await invitee.as.query(api.invites.myPendingInvites, {
+      now: expiresAt - 1,
+    }),
+  ).toHaveLength(1);
+  expect(
+    await invitee.as.query(api.invites.myPendingInvites, { now: expiresAt }),
+  ).toEqual([]);
+});
+
+test("myPendingInvites drops an invite once it is redeemed", async () => {
+  const t = convexTest(schema, modules);
+  const { token, invitee } = await withInvite(t);
+  await invitee.as.mutation(api.invites.redeem, {
+    token,
+    teamName: "Gridiron Geese",
+  });
+
+  expect(
+    await invitee.as.query(api.invites.myPendingInvites, { now: Date.now() }),
+  ).toEqual([]);
+});
+
 test("leagueRoster rejects a caller who is not a member of the league", async () => {
   const t = convexTest(schema, modules);
   const { leagueId } = await withLeague(t);
   const outsider = await signedIn(t, "outsider@example.com");
 
   await expect(
-    outsider.as.query(api.invites.leagueRoster, { leagueId }),
+    outsider.as.query(api.invites.leagueRoster, { leagueId, now: Date.now() }),
   ).rejects.toThrow(/NotMember/);
 });
 
@@ -219,7 +533,10 @@ test("leagueRoster returns the member roster to a member", async () => {
   const memberId = await addMember(t, leagueId, "member@example.com");
   const asMember = t.withIdentity({ subject: `${memberId}|session` });
 
-  const roster = await asMember.query(api.invites.leagueRoster, { leagueId });
+  const roster = await asMember.query(api.invites.leagueRoster, {
+    leagueId,
+    now: Date.now(),
+  });
 
   expect(roster.members).toEqual(
     expect.arrayContaining([
@@ -246,7 +563,10 @@ test("leagueRoster hides pending invites from a non-commissioner member", async 
   const memberId = await addMember(t, leagueId, "member@example.com");
   const asMember = t.withIdentity({ subject: `${memberId}|session` });
 
-  const roster = await asMember.query(api.invites.leagueRoster, { leagueId });
+  const roster = await asMember.query(api.invites.leagueRoster, {
+    leagueId,
+    now: Date.now(),
+  });
 
   expect(roster.pendingInvites).toBeUndefined();
 });
@@ -259,7 +579,10 @@ test("leagueRoster returns pending invites to the commissioner", async () => {
     email: "sister@example.com",
   });
 
-  const roster = await as.query(api.invites.leagueRoster, { leagueId });
+  const roster = await as.query(api.invites.leagueRoster, {
+    leagueId,
+    now: Date.now(),
+  });
 
   expect(roster.pendingInvites).toEqual([
     expect.objectContaining({ targetEmail: "sister@example.com" }),
@@ -279,7 +602,10 @@ test("leagueRoster omits expired pending invites from the commissioner's view", 
     await ctx.db.patch(invite!._id, { expiresAt: Date.now() - 1 });
   });
 
-  const roster = await as.query(api.invites.leagueRoster, { leagueId });
+  const roster = await as.query(api.invites.leagueRoster, {
+    leagueId,
+    now: Date.now(),
+  });
 
   expect(roster.pendingInvites).toEqual([]);
 });
