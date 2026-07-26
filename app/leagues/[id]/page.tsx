@@ -11,9 +11,9 @@ import {
   useQuery,
 } from "convex/react";
 
-import { api } from "../../../convex/_generated/api";
-import { Id } from "../../../convex/_generated/dataModel";
-import { SignInForm } from "../../SignInForm";
+import { SignInForm } from "@/app/SignInForm";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
 
 // The league roster page (M2b, #59): every member sees who is playing; the
 // commissioner also sees the invite-by-email form and the outstanding pending
