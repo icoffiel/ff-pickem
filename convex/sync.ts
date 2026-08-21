@@ -1,7 +1,7 @@
 import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
 import { CURRENT_SEASON } from "./config";
-import { parseScoreboard, scoreboardUrl } from "./espn";
+import { parseScoreboard, scoreboardUrl, UnreadableEvent } from "./espn";
 import { LiveUpsert, ScheduleUpsert, WeekInPlay } from "./games";
 import { NFLVERSE_GAMES_CSV_URL, parseSchedule } from "./nflverse";
 
@@ -67,8 +67,8 @@ export const scheduleSync = internalAction({
 type LiveSyncResult = LiveUpsert & {
   /** The weeks actually fetched. Empty is the no-op the gate exists to produce. */
   polled: WeekInPlay[];
-  /** Scoreboard events that could not be read as a game. */
-  unreadable: string[];
+  /** Scoreboard events that could not be read as a game, and why. */
+  unreadable: UnreadableEvent[];
 };
 
 /**
@@ -126,9 +126,17 @@ export const liveSync = internalAction({
       result.unreadable.push(...scoreboard.unreadable);
     }
 
+    // Neither of these is fatal — the rest of the Sunday still syncs — but both
+    // are loud, because a game that is skipped or unmatched is a game that will
+    // never grade, and an absence is not something anyone notices in time.
+    if (result.unreadable.length > 0) {
+      console.warn(
+        `ESPN published ${result.unreadable.length} event(s) that could not be read as a game, skipped: ${result.unreadable
+          .map(({ event, reason }) => `${event} (${reason})`)
+          .join("; ")}`,
+      );
+    }
     if (result.unmatched.length > 0) {
-      // Not fatal — the rest of the Sunday still syncs — but loud, because an
-      // event that matches no row is a game that will never grade.
       console.warn(
         `ESPN reported ${result.unmatched.length} game(s) with no matching row: ${result.unmatched.join(", ")}`,
       );

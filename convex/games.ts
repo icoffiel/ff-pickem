@@ -368,31 +368,34 @@ export const applyLiveEvents = internalMutation({
         continue;
       }
 
-      const fields = {
-        status: event.status,
-        homeScore: event.homeScore,
-        awayScore: event.awayScore,
-        outcome: isFinal
-          ? outcomeOf(event.homeScore, event.awayScore)
-          : existing.outcome,
-      };
+      const outcome = isFinal
+        ? outcomeOf(event.homeScore, event.awayScore)
+        : undefined;
 
       // Most ticks find most games unchanged — a score moves every few minutes,
       // not every fifteen seconds. Writing anyway would wake every subscription
       // reading `games` on every tick of every game window.
       if (
-        existing.status === fields.status &&
-        existing.homeScore === fields.homeScore &&
-        existing.awayScore === fields.awayScore &&
-        existing.outcome === fields.outcome
+        existing.status === event.status &&
+        existing.homeScore === event.homeScore &&
+        existing.awayScore === event.awayScore &&
+        (!isFinal || existing.outcome === outcome)
       ) {
         unchanged++;
         continue;
       }
 
       // `patch`, not `replace`: the schedule sync owns every other column on
-      // this row, and ESPN has nothing to say about any of them.
-      await ctx.db.patch(existing._id, fields);
+      // this row, and ESPN has nothing to say about any of them. `outcome` is
+      // left off the object entirely unless the game finaled — a patch is a
+      // shallow merge, so an absent key keeps the stored value while an explicit
+      // `undefined` would *delete* it.
+      await ctx.db.patch(existing._id, {
+        status: event.status,
+        homeScore: event.homeScore,
+        awayScore: event.awayScore,
+        ...(isFinal ? { outcome } : {}),
+      });
       updated++;
     }
 

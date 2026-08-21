@@ -157,11 +157,45 @@ describe("parseScoreboard", () => {
       scoreboardOf(2025, 1, halfAnEvent, FINAL_AWAY_WIN_PIT_AT_NYJ),
     );
 
-    expect(parsed.unreadable).toEqual(["NYG @ WSH"]);
+    expect(parsed.unreadable).toEqual([
+      { event: "NYG @ WSH", reason: "missing a home or away competitor" },
+    ]);
     expect(parsed.events.map((event) => event.homeTeam)).toEqual(["NYJ"]);
   });
 
   test("rejects a payload that is not a scoreboard at all", () => {
     expect(() => parseScoreboard({ error: "not found" })).toThrow(/scoreboard/);
+  });
+});
+
+describe("an unknown state, inside a whole payload", () => {
+  test("costs one event, not the week", () => {
+    // `statusFromState` throws, and `parseScoreboard` catches it per event: a
+    // single postponed or oddly-flagged game is skipped and named, while a
+    // wholesale change of ESPN's vocabulary would mark every event unreadable.
+    const postponed: ScoreboardEventFixture = {
+      ...FINAL_HOME_WIN_NYG_AT_WSH,
+      status: {
+        type: {
+          id: "8",
+          name: "STATUS_POSTPONED",
+          state: "postponed",
+          completed: false,
+          description: "Postponed",
+        },
+      },
+    };
+
+    const parsed = parseScoreboard(
+      scoreboardOf(2025, 1, postponed, FINAL_AWAY_WIN_PIT_AT_NYJ),
+    );
+
+    expect(parsed.unreadable).toEqual([
+      {
+        event: "NYG @ WSH",
+        reason: expect.stringContaining("postponed") as string,
+      },
+    ]);
+    expect(parsed.events.map((event) => event.homeTeam)).toEqual(["NYJ"]);
   });
 });

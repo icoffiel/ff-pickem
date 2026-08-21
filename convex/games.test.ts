@@ -4,7 +4,12 @@ import { describe, expect, test, vi } from "vitest";
 
 import { internal } from "./_generated/api";
 import { Doc } from "./_generated/dataModel";
-import { mergeScheduledGame } from "./games";
+import {
+  FINAL_AFTER_KICKOFF_MS,
+  LIVE_WINDOW_AFTER_KICKOFF_MS,
+  LIVE_WINDOW_BEFORE_KICKOFF_MS,
+  mergeScheduledGame,
+} from "./games";
 import { ScheduledGame } from "./nflverse";
 import schema from "./schema";
 
@@ -359,6 +364,39 @@ describe("weeksInPlay", () => {
         now: KICKOFF_2026_W1 - 10 * 60 * 1000,
       }),
     ).toEqual([{ season: SEASON, week: 1 }]);
+  });
+
+  test("holds the line exactly at the window's two edges", async () => {
+    const t = await withGames([{ gameId: "2026_01_CHI_CAR" }]);
+    const inWindow = [{ season: SEASON, week: 1 }];
+
+    // Opens at kickoff − 15 min, closes at kickoff + 5 h — both inclusive.
+    expect(
+      await t.query(internal.games.weeksInPlay, {
+        now: KICKOFF_2026_W1 - LIVE_WINDOW_BEFORE_KICKOFF_MS - 1,
+      }),
+    ).toEqual([]);
+    expect(
+      await t.query(internal.games.weeksInPlay, {
+        now: KICKOFF_2026_W1 - LIVE_WINDOW_BEFORE_KICKOFF_MS,
+      }),
+    ).toEqual(inWindow);
+    expect(
+      await t.query(internal.games.weeksInPlay, {
+        now: KICKOFF_2026_W1 + LIVE_WINDOW_AFTER_KICKOFF_MS,
+      }),
+    ).toEqual(inWindow);
+    expect(
+      await t.query(internal.games.weeksInPlay, {
+        now: KICKOFF_2026_W1 + LIVE_WINDOW_AFTER_KICKOFF_MS + 1,
+      }),
+    ).toEqual([]);
+  });
+
+  test("closes the window before the schedule sync's age guard opens", async () => {
+    // The two sources hand off rather than overlap: ESPN finals a game inside
+    // five hours, and nflverse's backstop picks up from six.
+    expect(LIVE_WINDOW_AFTER_KICKOFF_MS).toBeLessThan(FINAL_AFTER_KICKOFF_MS);
   });
 
   test("closes five hours after kickoff", async () => {

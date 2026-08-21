@@ -96,16 +96,20 @@ export type ScoreboardEvent = {
   status: GameStatus;
 };
 
+/** An event that could not be read as a game, and why. Carrying the reason is
+ * what makes an upstream shape change diagnosable from the log line alone. */
+export type UnreadableEvent = { event: string; reason: string };
+
 /** What one pass over a scoreboard payload found. */
 export type Scoreboard = {
   season: number;
   week: number;
   events: ScoreboardEvent[];
   /**
-   * The names of events that could not be read as a game. Reported rather than
-   * thrown — see `parseScoreboard`.
+   * Events that could not be read as a game. Reported rather than thrown — see
+   * `parseScoreboard`.
    */
-  unreadable: string[];
+  unreadable: UnreadableEvent[];
 };
 
 /** A JSON object, before anything is known about its shape. */
@@ -146,6 +150,18 @@ function competitorsOf(event: Json): { home: Json; away: Json } {
   return { home, away };
 }
 
+/** What to call an event in a diagnostic, before it is known to be readable. */
+function nameOf(event: unknown, index: number): string {
+  if (isObject(event)) {
+    for (const label of [event.shortName, event.id]) {
+      if (typeof label === "string" && label !== "") {
+        return label;
+      }
+    }
+  }
+  return `event ${index}`;
+}
+
 /** A competitor's club, in nflverse's spelling. */
 function teamOf(competitor: Json): string {
   const team = competitor.team;
@@ -166,8 +182,10 @@ function teamOf(competitor: Json): string {
  *
  * **An event that cannot be read is reported, not thrown.** One weird event
  * should not stop the other fifteen games of a Sunday from syncing. It is named
- * in the return value so it cannot vanish quietly: a skipped event is a whole
- * game that never grades.
+ * in the return value — with the reason — so it cannot vanish quietly: a skipped
+ * event is a whole game that never grades. An unrecognized `state` arrives here
+ * as one of these, so a single postponed or oddly-flagged game is skipped while
+ * a wholesale change of ESPN's vocabulary marks the entire week unreadable.
  *
  * **A payload that is not a scoreboard at all does throw.** An error body, an
  * HTML interstitial or a shape change would otherwise parse as "no events",
@@ -192,13 +210,11 @@ export function parseScoreboard(payload: unknown): Scoreboard {
   }
 
   const events: ScoreboardEvent[] = [];
-  const unreadable: string[] = [];
+  const unreadable: UnreadableEvent[] = [];
 
   for (const [index, event] of payload.events.entries()) {
     // Named before it is read, so an unreadable event can still say which one.
-    const name = isObject(event)
-      ? ((event.shortName ?? event.id) as string)
-      : `event ${index}`;
+    const name = nameOf(event, index);
     try {
       if (!isObject(event)) {
         throw new Error("not an object");
@@ -217,10 +233,13 @@ export function parseScoreboard(payload: unknown): Scoreboard {
         status: statusFromState(String(state)),
       });
     } catch (cause) {
-      console.warn(
-        `ESPN scoreboard event "${name}" could not be read as a game, skipped: ${cause}`,
-      );
-      unreadable.push(String(name));
+      // Returned, not logged: this file stays pure, and the action that called
+      // it does the talking — the same split `parseSchedule` uses for the games
+      // nflverse has not scheduled yet.
+      unreadable.push({
+        event: name,
+        reason: cause instanceof Error ? cause.message : String(cause),
+      });
     }
   }
 
