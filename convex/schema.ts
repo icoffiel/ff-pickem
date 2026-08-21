@@ -75,7 +75,9 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_token", ["token"])
-    .index("by_league_email", ["leagueId", "targetEmail"]),
+    .index("by_league_email", ["leagueId", "targetEmail"])
+    // An invitee's own invites, across every league that has invited them.
+    .index("by_email", ["targetEmail"]),
 
   games: defineTable({
     gameId: v.string(), // external nflverse id, e.g. "2026_01_KC_BAL"

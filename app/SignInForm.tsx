@@ -7,7 +7,11 @@ import { useAuthActions } from "@convex-dev/auth/react";
 // The signed-out view (#39): an email field that starts magic-link sign-in.
 // Deliberately unstyled — the visual pass is M6 (#21). This only proves the
 // flow is reachable and wired.
-export function SignInForm() {
+//
+// `redirectTo` is where the magic link lands once the address is proven, so an
+// invitee arriving at `/invite/<token>` signed out comes back to that same
+// invite instead of the home page (#60).
+export function SignInForm({ redirectTo }: { redirectTo?: string }) {
   const { signIn } = useAuthActions();
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -26,7 +30,10 @@ export function SignInForm() {
     event.preventDefault();
     setSubmitting(true);
     try {
-      await signIn("email", { email });
+      await signIn(
+        "email",
+        redirectTo === undefined ? { email } : { email, redirectTo },
+      );
       setSent(true);
     } finally {
       setSubmitting(false);

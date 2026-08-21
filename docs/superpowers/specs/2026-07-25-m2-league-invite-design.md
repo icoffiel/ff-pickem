@@ -86,7 +86,7 @@ Enforced by hand in mutations (Convex has no unique constraints); each is a test
 - **Terminal states refuse clearly:** redeeming an `expired`/`superseded`/`revoked`/already-`accepted` invite throws a distinct named error the accept page renders as a friendly message. (`revoked` is *set* in M6; redeem *handles* it now.)
 - **Role consistency:** only `createLeague` mints a `commissioner`; every redeemed membership is a `member`.
 
-Mutations throw `ConvexError` with a stable `code` (`NotCommissioner`, `EmailMismatch`, `InviteExpired`, `InviteNotFound`, `AlreadyMember`) so the UI branches on code, not message text.
+Mutations throw `ConvexError` with a stable `code` (`NotCommissioner`, `EmailMismatch`, `InviteNotFound`, `AlreadyMember`, and one per dead invite state: `InviteExpired`, `InviteSuperseded`, `InviteRevoked`, `InviteAlreadyAccepted`) so the UI branches on code, not message text.
 
 ## Testing strategy
 
