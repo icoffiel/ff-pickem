@@ -98,7 +98,9 @@ accounts are set up by a human:
   > and is no longer selected. It was orphaned — the CLI could not resolve its
   > project — so commands failed until `--deployment` was passed explicitly.
 
-- **Resend** (M0a, issue #22) — **deferred: no sending domain owned yet.**
+- **Resend** (issue #22) — **deferred to go-live by decision.** A sending
+  domain is not worth registering for an app that may never carry real users,
+  so #22 is a go-live step under M6 (#21) rather than setup work.
   Without a verified domain, Resend's shared `onboarding@resend.dev` sender
   returns a 403 for any recipient other than the Resend account holder's own
   address ([Resend error reference](https://resend.com/docs/api-reference/errors)).
@@ -125,8 +127,9 @@ accounts are set up by a human:
     reactivate-not-duplicate branch are all buildable and testable without a
     domain. M2's flows are driven end to end using the console transport.
   - **A domain is needed only at go-live** — the first time a real league
-    member must receive a real invite in a real inbox. Allow for DNS
-    propagation lead time then, and complete #22 before that point.
+    member must receive a real invite in a real inbox. That is the point to
+    register one and complete #22; allow for DNS propagation lead time. Until
+    then no milestone waits on it.
   - Untested shortcut worth five minutes when the Resend account is created:
     whether plus-addressing (`you+alice@gmail.com`) satisfies Resend's
     own-address check. If it does, real multi-recipient inbox testing is

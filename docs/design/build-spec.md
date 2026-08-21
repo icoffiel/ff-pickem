@@ -29,7 +29,7 @@ When this spec and a design doc ever disagree, the **design doc wins** — this 
 - **Backend + datastore:** **Convex** — document datastore + backend platform. Accepts vendor lock-in and hand-written standings aggregation to gain fewest moving parts, built-in realtime, built-in cron, and one TypeScript language top to bottom. (Survey #8 → decision #9.)
 - **Frontend:** **Next.js** responsive web app, hosted on **Vercel Hobby** (the one surviving piece of #4 after the Convex decision).
 - **Auth:** **Convex Auth** with the **Resend** magic-link provider (#6, #3). An invite *is* a magic link at the auth layer, but the app-level invite grant is a separate `invites` row (see Auth & invite below).
-- **Email:** **Resend** free tier (3,000/mo · 100/day, 1 domain). Requires domain verification + SPF/DKIM at setup (#3).
+- **Email:** **Resend** free tier (3,000/mo · 100/day, 1 domain), reached through a **transport seam** (`AUTH_EMAIL_TRANSPORT`): `console` writes the link to the deployment log, `resend` sends it. Every milestone is built and verified on `console`. Sending to a *third party's* inbox needs a verified sending domain (SPF/DKIM), which is a **go-live step (#22), not a setup step** — no domain is registered until this app is going live for real users.
 - **Scheduled jobs:** Convex **`crons.ts`** (replaces the dropped GitHub Actions cron from #4).
 - **NFL data:** hybrid, free-only (no paid-API budget) — **nflverse/nfldata `games` dataset** as the schedule + backstop source, **ESPN's unofficial scoreboard API** as the live-score / reliable-final fallback (#2).
 
@@ -102,18 +102,18 @@ Milestones are ordered so each one is independently verifiable and unblocks the 
 
 ### M0 — Project skeleton & accounts
 - Scaffold Next.js (App Router) + Convex; wire the Convex client/provider.
-- Provision accounts: Convex project, Vercel Hobby, Resend (verify a domain + SPF/DKIM — this has DNS-propagation lead time, so **start it first**).
+- Provision accounts: Convex project, Vercel Hobby, Resend (free-tier account only — **no sending domain**; domain verification is deferred to go-live, #22).
 - **Verify:** app boots locally against a Convex dev deployment; a trivial Convex query round-trips to the browser.
 
 ### M1 — Schema & auth
 - Lift `convex/schema.ts` from [`data-model.md`](./data-model.md) verbatim (confirm the `authTables` import + `v` surface against installed versions — see gates below).
 - Stand up Convex Auth with the Resend magic-link provider; a user can sign in by email and a `users` row appears.
-- **Verify:** magic-link sign-in works end-to-end against Resend; session persists.
+- **Verify:** magic-link sign-in works end-to-end through the configured transport (`console` in dev and prod today); session persists.
 
 ### M2 — League creation & the invite→membership flow
 - `createLeague` mutation (creator born `commissioner`, embeds the default `rules`); league-create screen.
-- App-level `invites`: create (one-live-per-(email,league), 14-day expiry, supersede), email the link via Resend, and `/invite/<token>` redemption (email-bound, captures team name, born-active membership, reactivate-not-duplicate).
-- **Verify:** a second real email receives an invite, redeems it, and shows up as an active member with a team name. Uniqueness + email-binding enforced in the mutations.
+- App-level `invites`: create (one-live-per-(email,league), 14-day expiry, supersede), send the link through the email transport, and `/invite/<token>` redemption (email-bound, captures team name, born-active membership, reactivate-not-duplicate).
+- **Verify:** a second address is invited, redeems the link, and shows up as an active member with a team name — driven end to end in a real browser (`e2e/invite.spec.ts`), reading the link from the transport. Uniqueness + email-binding enforced in the mutations. *Delivery to a real third-party inbox is not verified here; it is a go-live step (#22).*
 
 ### M3 — NFL data sync
 - `games` table + `scheduleSync` (nflverse, 6h upsert by external `gameId`) and `liveSync` (ESPN, 15 min, self-gating; `state`→`status`; compute `outcome` on final).
@@ -134,6 +134,7 @@ Milestones are ordered so each one is independently verifiable and unblocks the 
 ### M6 — UI polish & commissioner powers → end-to-end loop
 - Build out the "Streaks" card UI across all screens (home, standings, make-picks, empty/error) with the motivational layer; **visual pass** picks the real palette + typography (deferred from #11).
 - Commissioner gear: result override (upsert/revert, Overridden badge + synced value), member removal + un-remove, invite revocation, read-only rules panel + editable name.
+- **Go-live prerequisite (#22):** real members can only be invited once a sending domain is verified and the transport is flipped to `resend`. Allow DNS-propagation lead time, and treat this as the point the domain is worth registering — not before.
 - **Verify (destination):** a real family league runs one full week end-to-end — create → invite → pick → lock → grade → standings — with a commissioner override exercised. Then it's ready for a full regular-season loop.
 
 ## Build-time verification gates
