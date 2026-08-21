@@ -1,7 +1,8 @@
 import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
 import { CURRENT_SEASON } from "./config";
-import { ScheduleUpsert } from "./games";
+import { parseScoreboard, scoreboardUrl } from "./espn";
+import { LiveUpsert, ScheduleUpsert, WeekInPlay } from "./games";
 import { NFLVERSE_GAMES_CSV_URL, parseSchedule } from "./nflverse";
 
 // The external-data actions. An action here does exactly three things: fetch,
@@ -57,5 +58,82 @@ export const scheduleSync = internalAction({
       games,
     });
     return { ...upsert, withoutKickoffTime };
+  },
+});
+
+/** What one `liveSync` run did: the weeks it polled and what they changed.
+ * Named so the action can annotate its own return type — inferring it would run
+ * through the generated `api` this action is part of. */
+type LiveSyncResult = LiveUpsert & {
+  /** The weeks actually fetched. Empty is the no-op the gate exists to produce. */
+  polled: WeekInPlay[];
+  /** Scoreboard events that could not be read as a game. */
+  unreadable: string[];
+};
+
+/**
+ * Pull ESPN's scoreboard for every week that has a game in play, and apply it.
+ * Registered on a 15-minute interval in `crons.ts`.
+ *
+ * **The run gates itself before spending a fetch.** It first asks the database
+ * whether any unfinished game is inside its kickoff window; when the answer is
+ * no it returns without calling ESPN at all. That is what makes a 15-minute
+ * cron affordable year-round with no season-aware scheduling: out of season,
+ * every one of the 96 daily runs is this no-op — ~2,900 function calls a month
+ * against Convex's free-tier 1,000,000, about 0.3%.
+ *
+ * The clock read is the action's, not a caller's. An action is not a
+ * subscription, so `Date.now()` here is authoritative (ADR 0002); the gate takes
+ * it as an argument only because a *query* may not read it.
+ */
+export const liveSync = internalAction({
+  args: {},
+  handler: async (ctx): Promise<LiveSyncResult> => {
+    const polled = await ctx.runQuery(internal.games.weeksInPlay, {
+      now: Date.now(),
+    });
+
+    const result: LiveSyncResult = {
+      polled,
+      updated: 0,
+      unchanged: 0,
+      unmatched: [],
+      unreadable: [],
+    };
+
+    for (const week of polled) {
+      const response = await fetch(scoreboardUrl(week.season, week.week));
+      if (!response.ok) {
+        // A quiet no-op here would look exactly like the out-of-season path, so
+        // a dead endpoint could leave a whole season ungraded and silent.
+        throw new Error(
+          `ESPN scoreboard fetch for ${week.season} week ${week.week} failed (${response.status} ${response.statusText})`,
+        );
+      }
+
+      const scoreboard = parseScoreboard(await response.json());
+      // The payload's own season and week, never the ones we asked for: the
+      // endpoint will happily answer a request for one season with another.
+      const applied = await ctx.runMutation(internal.games.applyLiveEvents, {
+        season: scoreboard.season,
+        week: scoreboard.week,
+        events: scoreboard.events,
+      });
+
+      result.updated += applied.updated;
+      result.unchanged += applied.unchanged;
+      result.unmatched.push(...applied.unmatched);
+      result.unreadable.push(...scoreboard.unreadable);
+    }
+
+    if (result.unmatched.length > 0) {
+      // Not fatal — the rest of the Sunday still syncs — but loud, because an
+      // event that matches no row is a game that will never grade.
+      console.warn(
+        `ESPN reported ${result.unmatched.length} game(s) with no matching row: ${result.unmatched.join(", ")}`,
+      );
+    }
+
+    return result;
   },
 });

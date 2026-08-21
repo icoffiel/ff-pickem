@@ -100,7 +100,11 @@ export default defineSchema({
     ),
   })
     .index("by_gameId", ["gameId"])
-    .index("by_season_week", ["season", "week"]),
+    .index("by_season_week", ["season", "week"])
+    // The live sync's gate (M3b) runs 96x/day and asks one question: is any
+    // unfinished game inside its kickoff window? A range read over the two
+    // unfinished statuses answers it without walking seasons of finaled rows.
+    .index("by_status_kickoff", ["status", "kickoffAt"]),
 
   picks: defineTable({
     membershipId: v.id("memberships"),

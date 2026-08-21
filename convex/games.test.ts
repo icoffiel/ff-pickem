@@ -10,6 +10,10 @@ import schema from "./schema";
 
 const modules = import.meta.glob("./**/*.ts");
 
+/** A `convexTest` handle that still knows our schema — `ReturnType<typeof
+ * convexTest>` alone drops the generic and leaves `db.query` untyped. */
+type TestConvex = ReturnType<typeof convexTest<typeof schema.tables>>;
+
 const SEASON = 2026;
 const KICKOFF = Date.parse("2026-09-13T17:00Z");
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
@@ -303,5 +307,379 @@ describe("applySchedule", () => {
       "2025_01_DAL_PHI",
       "2026_01_CHI_CAR",
     ]);
+  });
+});
+
+describe("weeksInPlay", () => {
+  const KICKOFF_2026_W1 = Date.parse("2026-09-13T17:00Z");
+
+  /** A `games` row as the schedule sync would have left it. */
+  async function withGames(
+    rows: Array<Partial<Doc<"games">> & { gameId: string }>,
+  ) {
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      for (const row of rows) {
+        await ctx.db.insert("games", {
+          season: SEASON,
+          week: 1,
+          gameType: "REG",
+          weekday: "Sunday",
+          kickoffAt: KICKOFF_2026_W1,
+          homeTeam: "CAR",
+          awayTeam: "CHI",
+          status: "scheduled",
+          ...row,
+        });
+      }
+    });
+    return t;
+  }
+
+  test("finds nothing when the nearest game is days away", async () => {
+    const t = await withGames([{ gameId: "2026_01_CHI_CAR" }]);
+
+    const weeks = await t.query(internal.games.weeksInPlay, {
+      now: KICKOFF_2026_W1 - 3 * 24 * 60 * 60 * 1000,
+    });
+
+    expect(weeks).toEqual([]);
+  });
+
+  test("opens shortly before kickoff, so no game reads scheduled after the snap", async () => {
+    const t = await withGames([{ gameId: "2026_01_CHI_CAR" }]);
+
+    expect(
+      await t.query(internal.games.weeksInPlay, {
+        now: KICKOFF_2026_W1 - 20 * 60 * 1000,
+      }),
+    ).toEqual([]);
+    expect(
+      await t.query(internal.games.weeksInPlay, {
+        now: KICKOFF_2026_W1 - 10 * 60 * 1000,
+      }),
+    ).toEqual([{ season: SEASON, week: 1 }]);
+  });
+
+  test("closes five hours after kickoff", async () => {
+    const t = await withGames([{ gameId: "2026_01_CHI_CAR" }]);
+
+    expect(
+      await t.query(internal.games.weeksInPlay, {
+        now: KICKOFF_2026_W1 + 4 * 60 * 60 * 1000,
+      }),
+    ).toEqual([{ season: SEASON, week: 1 }]);
+    expect(
+      await t.query(internal.games.weeksInPlay, {
+        now: KICKOFF_2026_W1 + 6 * 60 * 60 * 1000,
+      }),
+    ).toEqual([]);
+  });
+
+  test("ignores a game that has already finaled", async () => {
+    const t = await withGames([
+      { gameId: "2026_01_CHI_CAR", status: "final", outcome: "home" },
+    ]);
+
+    expect(
+      await t.query(internal.games.weeksInPlay, { now: KICKOFF_2026_W1 }),
+    ).toEqual([]);
+  });
+
+  test("reports a week once however many of its games are in window", async () => {
+    const t = await withGames([
+      { gameId: "2026_01_CHI_CAR" },
+      { gameId: "2026_01_NE_SEA", homeTeam: "SEA", awayTeam: "NE" },
+      {
+        gameId: "2026_01_BUF_HOU",
+        homeTeam: "HOU",
+        awayTeam: "BUF",
+        status: "in_progress",
+      },
+    ]);
+
+    expect(
+      await t.query(internal.games.weeksInPlay, { now: KICKOFF_2026_W1 }),
+    ).toEqual([{ season: SEASON, week: 1 }]);
+  });
+
+  test("reports each week that has a game in window", async () => {
+    const t = await withGames([
+      { gameId: "2026_01_CHI_CAR" },
+      { gameId: "2026_02_NE_SEA", week: 2, homeTeam: "SEA", awayTeam: "NE" },
+    ]);
+
+    expect(
+      await t.query(internal.games.weeksInPlay, { now: KICKOFF_2026_W1 }),
+    ).toEqual([
+      { season: SEASON, week: 1 },
+      { season: SEASON, week: 2 },
+    ]);
+  });
+});
+
+describe("applyLiveEvents", () => {
+  const KICKOFF_2026_W1 = Date.parse("2026-09-13T17:00Z");
+
+  /** One week's `games` rows, as the schedule sync would have left them. */
+  async function withWeekOne(
+    matchups: Array<{ away: string; home: string } & Partial<Doc<"games">>>,
+  ) {
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      for (const { away, home, ...overrides } of matchups) {
+        await ctx.db.insert("games", {
+          gameId: `2026_01_${away}_${home}`,
+          season: SEASON,
+          week: 1,
+          gameType: "REG",
+          weekday: "Sunday",
+          kickoffAt: KICKOFF_2026_W1,
+          homeTeam: home,
+          awayTeam: away,
+          status: "scheduled",
+          ...overrides,
+        });
+      }
+    });
+    return t;
+  }
+
+  const gameNamed = (t: TestConvex, gameId: string) =>
+    t.run(async (ctx) =>
+      ctx.db
+        .query("games")
+        .withIndex("by_gameId", (q) => q.eq("gameId", gameId))
+        .unique(),
+    );
+
+  test("writes a live score without finaling the game", async () => {
+    const t = await withWeekOne([{ away: "CHI", home: "CAR" }]);
+
+    await t.mutation(internal.games.applyLiveEvents, {
+      season: SEASON,
+      week: 1,
+      events: [
+        {
+          homeTeam: "CAR",
+          awayTeam: "CHI",
+          homeScore: 7,
+          awayScore: 10,
+          status: "in_progress",
+        },
+      ],
+    });
+
+    const game = await gameNamed(t, "2026_01_CHI_CAR");
+    expect(game).toMatchObject({
+      status: "in_progress",
+      homeScore: 7,
+      awayScore: 10,
+    });
+    expect(game?.outcome).toBeUndefined();
+  });
+
+  test("grades a final game by writing its outcome", async () => {
+    const t = await withWeekOne([
+      { away: "CHI", home: "CAR" },
+      { away: "NE", home: "SEA" },
+      { away: "GB", home: "DAL" },
+    ]);
+
+    await t.mutation(internal.games.applyLiveEvents, {
+      season: SEASON,
+      week: 1,
+      events: [
+        {
+          homeTeam: "CAR",
+          awayTeam: "CHI",
+          homeScore: 24,
+          awayScore: 20,
+          status: "final",
+        },
+        {
+          homeTeam: "SEA",
+          awayTeam: "NE",
+          homeScore: 13,
+          awayScore: 17,
+          status: "final",
+        },
+        {
+          homeTeam: "DAL",
+          awayTeam: "GB",
+          homeScore: 40,
+          awayScore: 40,
+          status: "final",
+        },
+      ],
+    });
+
+    expect(await gameNamed(t, "2026_01_CHI_CAR")).toMatchObject({
+      status: "final",
+      outcome: "home",
+    });
+    expect(await gameNamed(t, "2026_01_NE_SEA")).toMatchObject({
+      status: "final",
+      outcome: "away",
+    });
+    expect(await gameNamed(t, "2026_01_GB_DAL")).toMatchObject({
+      status: "final",
+      outcome: "tie",
+    });
+  });
+
+  test("lands an event only on the row with the same season, week, home and away", async () => {
+    const t = await withWeekOne([
+      { away: "CHI", home: "CAR" },
+      // The same matchup, reversed — the away row must not take the home row's
+      // score, or a whole week grades backwards.
+      { away: "CAR", home: "CHI", gameId: "2026_09_CAR_CHI", week: 9 },
+      { away: "NE", home: "SEA" },
+    ]);
+
+    await t.mutation(internal.games.applyLiveEvents, {
+      season: SEASON,
+      week: 1,
+      events: [
+        {
+          homeTeam: "CAR",
+          awayTeam: "CHI",
+          homeScore: 24,
+          awayScore: 20,
+          status: "final",
+        },
+      ],
+    });
+
+    expect(await gameNamed(t, "2026_01_CHI_CAR")).toMatchObject({
+      status: "final",
+      homeScore: 24,
+    });
+    const reversed = await gameNamed(t, "2026_09_CAR_CHI");
+    expect(reversed).toMatchObject({ status: "scheduled" });
+    expect(reversed?.homeScore).toBeUndefined();
+    expect(await gameNamed(t, "2026_01_NE_SEA")).toMatchObject({
+      status: "scheduled",
+    });
+  });
+
+  test("reports an unmatched event instead of failing the batch", async () => {
+    const t = await withWeekOne([{ away: "CHI", home: "CAR" }]);
+
+    const result = await t.mutation(internal.games.applyLiveEvents, {
+      season: SEASON,
+      week: 1,
+      events: [
+        {
+          homeTeam: "XXX",
+          awayTeam: "YYY",
+          homeScore: 3,
+          awayScore: 0,
+          status: "final",
+        },
+        {
+          homeTeam: "CAR",
+          awayTeam: "CHI",
+          homeScore: 24,
+          awayScore: 20,
+          status: "final",
+        },
+      ],
+    });
+
+    expect(result.unmatched).toEqual(["YYY @ XXX"]);
+    expect(result.updated).toBe(1);
+    expect(await gameNamed(t, "2026_01_CHI_CAR")).toMatchObject({
+      status: "final",
+    });
+  });
+
+  test("never downgrades a game that has already finaled", async () => {
+    const t = await withWeekOne([
+      {
+        away: "CHI",
+        home: "CAR",
+        status: "final",
+        homeScore: 24,
+        awayScore: 20,
+        outcome: "home",
+      },
+    ]);
+
+    await t.mutation(internal.games.applyLiveEvents, {
+      season: SEASON,
+      week: 1,
+      events: [
+        {
+          homeTeam: "CAR",
+          awayTeam: "CHI",
+          homeScore: 0,
+          awayScore: 0,
+          status: "in_progress",
+        },
+      ],
+    });
+
+    expect(await gameNamed(t, "2026_01_CHI_CAR")).toMatchObject({
+      status: "final",
+      homeScore: 24,
+      awayScore: 20,
+      outcome: "home",
+    });
+  });
+
+  test("writes nothing for a game ESPN still calls scheduled", async () => {
+    // ESPN publishes `"0"` scores for a game that has not kicked off. Storing
+    // them would make the schedule sync's age guard read the game as scored,
+    // and final it six hours later as a 0-0 tie.
+    const t = await withWeekOne([{ away: "CHI", home: "CAR" }]);
+
+    const result = await t.mutation(internal.games.applyLiveEvents, {
+      season: SEASON,
+      week: 1,
+      events: [
+        {
+          homeTeam: "CAR",
+          awayTeam: "CHI",
+          homeScore: 0,
+          awayScore: 0,
+          status: "scheduled",
+        },
+      ],
+    });
+
+    expect(result).toMatchObject({ updated: 0, unchanged: 1 });
+    const untouched = await gameNamed(t, "2026_01_CHI_CAR");
+    expect(untouched).toMatchObject({ status: "scheduled" });
+    expect(untouched?.homeScore).toBeUndefined();
+    expect(untouched?.awayScore).toBeUndefined();
+  });
+
+  test("leaves a row alone when the reading has not changed", async () => {
+    const t = await withWeekOne([
+      {
+        away: "CHI",
+        home: "CAR",
+        status: "in_progress",
+        homeScore: 7,
+        awayScore: 10,
+      },
+    ]);
+
+    const result = await t.mutation(internal.games.applyLiveEvents, {
+      season: SEASON,
+      week: 1,
+      events: [
+        {
+          homeTeam: "CAR",
+          awayTeam: "CHI",
+          homeScore: 7,
+          awayScore: 10,
+          status: "in_progress",
+        },
+      ],
+    });
+
+    expect(result).toMatchObject({ updated: 0, unchanged: 1 });
   });
 });
