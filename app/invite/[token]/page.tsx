@@ -84,7 +84,13 @@ const REFUSAL_MESSAGES: Record<string, string> = {
   EmailMismatch:
     "This invite was sent to a different email address. Sign in as that address to join.",
   InviteExpired:
-    "This invite is no longer valid. Ask your commissioner for a fresh one.",
+    "This invite has expired. Ask your commissioner for a fresh one.",
+  InviteSuperseded:
+    "A newer invite replaced this one. Use the most recent invite email, or ask your commissioner to send another.",
+  InviteRevoked:
+    "Your commissioner cancelled this invite. Ask them to send a new one if you should still be in the league.",
+  InviteAlreadyAccepted:
+    "This invite has already been used. If you're a member, go back home to find the league.",
   InviteNotFound:
     "We couldn't find this invite. Ask your commissioner for a fresh link.",
   EmptyField: "Please choose a team name.",

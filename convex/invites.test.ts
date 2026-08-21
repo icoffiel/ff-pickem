@@ -4,7 +4,7 @@ import { expect, test } from "vitest";
 
 import { api } from "./_generated/api";
 import { Doc, Id } from "./_generated/dataModel";
-import { isRedeemable } from "./invites";
+import { inviteRefusal, isRedeemable } from "./invites";
 import schema from "./schema";
 
 const modules = import.meta.glob("./**/*.ts");
@@ -323,24 +323,25 @@ test("redeem refuses an invite whose 14 days have run out", async () => {
   ).rejects.toThrow(/InviteExpired/);
 });
 
-// A superseded, revoked or already-accepted link is dead for the same reason an
-// expired one is — from the invitee's side there is nothing to distinguish, and
-// the answer is always "ask for a fresh invite", so they share one code.
-test.each(["superseded", "revoked", "accepted"] as const)(
-  "redeem refuses a %s invite",
-  async (status) => {
-    const t = convexTest(schema, modules);
-    const { token, invitee } = await withInvite(t);
-    await patchOnlyInvite(t, { status });
+// Every dead link refuses, but each dead *state* gets its own code: the four
+// have different causes and different answers for the invitee, and the accept
+// page can only say so if the mutation tells them apart.
+test.each([
+  ["superseded", "InviteSuperseded"],
+  ["revoked", "InviteRevoked"],
+  ["accepted", "InviteAlreadyAccepted"],
+] as const)("redeem refuses a %s invite with %s", async (status, code) => {
+  const t = convexTest(schema, modules);
+  const { token, invitee } = await withInvite(t);
+  await patchOnlyInvite(t, { status });
 
-    await expect(
-      invitee.as.mutation(api.invites.redeem, {
-        token,
-        teamName: "Gridiron Geese",
-      }),
-    ).rejects.toThrow(/InviteExpired/);
-  },
-);
+  await expect(
+    invitee.as.mutation(api.invites.redeem, {
+      token,
+      teamName: "Gridiron Geese",
+    }),
+  ).rejects.toThrow(new RegExp(code));
+});
 
 test("redeem restores a removed membership instead of duplicating it", async () => {
   const t = convexTest(schema, modules);
@@ -420,24 +421,36 @@ test("redeem refuses an empty team name", async () => {
   ).rejects.toThrow(/EmptyField/);
 });
 
-// `isRedeemable` is the pure definition of "live invite" both readers share, so
-// it is pinned directly over (status, expiresAt, now) rather than only through
-// the mutation that persists the result.
+// `inviteRefusal` is the pure definition of "live invite" every reader shares —
+// both the boolean filters and the code `redeem` throws — so it is pinned
+// directly over (status, expiresAt, now) rather than only through the mutation
+// that persists the result.
 const anInvite = (fields: Partial<Doc<"invites">>) =>
   ({ status: "pending", expiresAt: 1000, ...fields }) as Doc<"invites">;
 
-test("isRedeemable accepts a pending invite before its expiry", () => {
+test("a pending invite before its expiry is redeemable", () => {
+  expect(inviteRefusal(anInvite({}), 999)).toBe(null);
   expect(isRedeemable(anInvite({}), 999)).toBe(true);
 });
 
-test("isRedeemable rejects a pending invite at and after its expiry", () => {
+test("a pending invite at and after its expiry has run out", () => {
+  expect(inviteRefusal(anInvite({}), 1000)).toBe("InviteExpired");
+  expect(inviteRefusal(anInvite({}), 1001)).toBe("InviteExpired");
   expect(isRedeemable(anInvite({}), 1000)).toBe(false);
-  expect(isRedeemable(anInvite({}), 1001)).toBe(false);
 });
 
-test.each(["accepted", "expired", "superseded", "revoked"] as const)(
-  "isRedeemable rejects a %s invite even before its expiry",
-  (status) => {
+// One row per dead state, so the mapping from status to code is pinned in one
+// readable place — including the `expired` status no writer sets today, since
+// expiry is lazy and the union still allows it.
+test.each([
+  ["expired", "InviteExpired"],
+  ["superseded", "InviteSuperseded"],
+  ["revoked", "InviteRevoked"],
+  ["accepted", "InviteAlreadyAccepted"],
+] as const)(
+  "a %s invite refuses with %s even before its expiry",
+  (status, code) => {
+    expect(inviteRefusal(anInvite({ status }), 999)).toBe(code);
     expect(isRedeemable(anInvite({ status }), 999)).toBe(false);
   },
 );

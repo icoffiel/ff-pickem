@@ -28,13 +28,43 @@ function normalizeEmail(email: string): string {
  */
 const NOW_ARG = { now: v.number() };
 
+/** Why an invite is dead, in the invitee's terms. Stable across the wire. */
+export type InviteRefusal =
+  | "InviteExpired"
+  | "InviteSuperseded"
+  | "InviteRevoked"
+  | "InviteAlreadyAccepted";
+
 /**
- * Whether an invite can still be walked through the door at `now`. Expiry is
- * lazy — checked at read time, with no cron flipping statuses — so this is the
- * one place "live invite" is defined, shared by every reader.
+ * Why this invite can't be walked through the door at `now`, or `null` if it
+ * can. Expiry is lazy — checked at read time, with no cron flipping statuses —
+ * so this is the one place "live invite" is defined, and the one place a dead
+ * state is named. Every reader shares it: the filters below via `isRedeemable`,
+ * and `redeem` via the code it throws.
  */
+export function inviteRefusal(
+  invite: Doc<"invites">,
+  now: number,
+): InviteRefusal | null {
+  switch (invite.status) {
+    case "pending":
+      return invite.expiresAt > now ? null : "InviteExpired";
+    // No writer sets `expired` today — expiry is lazy — but the status union
+    // allows it, so it reads the same as running out of time.
+    case "expired":
+      return "InviteExpired";
+    case "superseded":
+      return "InviteSuperseded";
+    case "revoked":
+      return "InviteRevoked";
+    case "accepted":
+      return "InviteAlreadyAccepted";
+  }
+}
+
+/** `inviteRefusal` for readers that only need the yes/no. */
 export function isRedeemable(invite: Doc<"invites">, now: number): boolean {
-  return invite.status === "pending" && invite.expiresAt > now;
+  return inviteRefusal(invite, now) === null;
 }
 
 /**
@@ -126,9 +156,9 @@ export const createInvite = mutation({
  *
  * The **email binding is the security boundary**, not the token: the token is
  * only a deep-link, so redemption requires the signed-in caller's email to be
- * the invited one. A dead link (expired, superseded, revoked, already accepted)
- * refuses with a single `InviteExpired` — the invitee's answer is "ask for a
- * fresh invite" in every one of those cases.
+ * the invited one. A dead link refuses with the code for *why* it is dead —
+ * expired, superseded, revoked or already accepted — so the accept page can
+ * tell the invitee which of those happened.
  */
 export const redeem = mutation({
   args: { token: v.string(), teamName: v.string() },
@@ -152,8 +182,9 @@ export const redeem = mutation({
     }
     // A mutation is not a subscription, so the server clock is the authority
     // here — this is the check that actually gates joining.
-    if (!isRedeemable(invite, Date.now())) {
-      throw new ConvexError({ code: "InviteExpired" });
+    const refusal = inviteRefusal(invite, Date.now());
+    if (refusal !== null) {
+      throw new ConvexError({ code: refusal });
     }
 
     const callerEmail = (await ctx.db.get(userId))?.email;
