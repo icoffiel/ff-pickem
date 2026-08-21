@@ -10,11 +10,15 @@
 
 import type * as auth from "../auth.js";
 import type * as config from "../config.js";
+import type * as crons from "../crons.js";
 import type * as emailTransport from "../emailTransport.js";
+import type * as games from "../games.js";
 import type * as http from "../http.js";
 import type * as inviteEmail from "../inviteEmail.js";
 import type * as invites from "../invites.js";
 import type * as leagues from "../leagues.js";
+import type * as nflverse from "../nflverse.js";
+import type * as sync from "../sync.js";
 import type * as users from "../users.js";
 
 import type {
@@ -26,11 +30,15 @@ import type {
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   config: typeof config;
+  crons: typeof crons;
   emailTransport: typeof emailTransport;
+  games: typeof games;
   http: typeof http;
   inviteEmail: typeof inviteEmail;
   invites: typeof invites;
   leagues: typeof leagues;
+  nflverse: typeof nflverse;
+  sync: typeof sync;
   users: typeof users;
 }>;
 
