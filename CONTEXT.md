@@ -37,7 +37,7 @@ _Avoid_: Magic link (that is the auth mechanism, not the grant)
 ### Play & scoring
 
 **Game**:
-A single NFL game — the global, league-agnostic fact: teams, week, season, kickoff, scores, and outcome. Shared by every League; no League owns a Game.
+A single NFL game — the global, league-agnostic fact: teams, week, season, kickoff, scores, and outcome. Shared by every League; no League owns a Game. Identified across syncs by the upstream nflverse `game_id`, which is **`season_week_AWAY_HOME`** — **away team first**. `2026_01_NE_SEA` is New England *at* Seattle. Read the home and away teams off the `home_team`/`away_team` columns, never out of the id: reading it left-to-right lands every score on the wrong team, and the mistake is invisible until a week grades backwards.
 _Avoid_: Match, fixture, matchup
 
 **Outcome**:
