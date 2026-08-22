@@ -62,19 +62,20 @@ low-value and per-deployment generation only adds a bootstrap step.
 
 The pair is generated in the exact shape `@convex-dev/auth@0.0.94` produces
 (`bin.cjs`: PKCS8 PEM with newlines replaced by spaces for `JWT_PRIVATE_KEY`;
-`{"keys":[{"use":"sig",…publicJWK}]}` for `JWKS` — RSA-2048, `e=65537`), then
-set with `--from-file` so the secret never lands in shell history. Equivalent
-one-shot for a single deployment: `npx @convex-dev/auth` (interactive).
+`{"keys":[{"use":"sig",…publicJWK}]}` for `JWKS`; RSA-2048 with `e=65537`, from
+the `generateKeyPair` defaults in that same file), then set with `--from-file`
+so the secret never lands in shell history. Equivalent one-shot for a single
+deployment: `npx @convex-dev/auth` (interactive).
 
 The dev keypair was **rotated on 2026-08-21** (#73): the previous one had been
 printed into an agent session log, so a fresh pair was generated, seeded as the
 dev project default, and written over the shared dev deployment. Prod was
 untouched — it never held the leaked pair.
 
-## Project env var defaults — dev (#73)
+## Project env var defaults — dev
 
 A brand-new dev deployment must be able to complete a sign-in without anyone
-hand-seeding it. Convex supports **project-level default environment variables
+hand-seeding it (#73). Convex supports **project-level default environment variables
 per deployment type**, and the four Convex-side auth vars that are the same for
 every dev deployment are set there:
 
@@ -122,11 +123,16 @@ to #30, the L3 CI gate). Captured plan for when it is picked up:
 - **Open question to verify first:** does `npx convex env set` during a Vercel
   build with a **preview** `CONVEX_DEPLOY_KEY` reliably target the correct
   per-branch deployment?
-- **How the keys reach a preview is now answered** by the dev work in #73:
-  `npx convex env default --type preview` seeds `JWT_PRIVATE_KEY`/`JWKS`/
-  `AUTH_EMAIL_TRANSPORT`/`AUTH_EMAIL_FROM` into every newly created preview
-  deployment, exactly as it does for dev. Only `SITE_URL` remains dynamic, which
-  is what the build-command bridge above is for.
+- **Open question — key strategy for ephemeral previews:** shared keypair vs
+  per-deployment. The *mechanism* for getting keys there is no longer in doubt —
+  the project-defaults feature used for dev in #73 has a `preview` deployment
+  type too (`npx convex env default set NAME --type preview`), and would seed
+  `JWT_PRIVATE_KEY`/`JWKS`/`AUTH_EMAIL_TRANSPORT`/`AUTH_EMAIL_FROM` into every
+  newly created preview deployment exactly as it does for dev. **Nothing is
+  seeded there today:** `npx convex env default list --type preview` is empty,
+  and #73 deliberately scoped itself to `dev`. So this is a plan, not a
+  configured state. `SITE_URL` would stay dynamic either way, which is what the
+  build-command bridge above is for.
 
 ## Vercel Deployment Protection — which URLs are gated
 
