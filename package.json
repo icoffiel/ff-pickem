@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
+    "setup": "npm install && npm run setup:worktree",
     "setup:worktree": "node scripts/setup-worktree.mjs",
     "dev": "run-p dev:frontend dev:backend",
     "dev:frontend": "dotenv -e .env.local -- next dev",

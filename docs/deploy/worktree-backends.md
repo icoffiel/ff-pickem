@@ -39,6 +39,37 @@ configuration has nothing to infer them from. They are baked in as
 `iain-coffield` / `ff-pickem` and can be overridden with the `CONVEX_TEAM` and
 `CONVEX_PROJECT` environment variables.
 
+### Running it automatically (Orca)
+
+`orca.yaml` at the repo root declares it as a worktree setup hook:
+
+```yaml
+scripts:
+  setup: npm run setup # npm install, then setup:worktree
+```
+
+Orca runs that inside each newly created worktree, so a worktree made through
+Orca arrives with dependencies installed and a backend of its own. The file is
+committed, so it travels with the repo rather than living in one person's Orca
+settings.
+
+Two things to know if it does not fire:
+
+- **A repo already configured with a local setup command wins.** Orca's
+  per-repo `commandSourcePolicy` decides where the command comes from:
+  `shared-only` (this file), `local-only` (the machine's own setting — this file
+  is then ignored entirely), or `run-both`. A repo with no local setup command
+  defaults to `shared-only` and picks this up on its own; one that was
+  configured with a local command before this file existed keeps using it until
+  the policy is changed in Orca's repo settings.
+- **Hooks get 2 minutes.** Fine once Convex's local backend binary is cached for
+  the machine; the very first worktree on a new machine also downloads it and
+  can overrun, which kills the hook part-way. Re-running `npm run setup` by hand
+  finishes it — every step is idempotent.
+
+Outside Orca — a plain `git clone` or `git worktree add` — nothing runs it for
+you; that is what the README's setup step is for.
+
 ## Why local is the default
 
 A **local** deployment runs on your machine: the whole database is a SQLite file

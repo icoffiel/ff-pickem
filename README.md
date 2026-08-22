@@ -67,6 +67,7 @@ see [`.env.example`](./.env.example) for the variables.
 
 | Command | What it does |
 |---|---|
+| `npm run setup` | `npm install` + `setup:worktree`. One command for a fresh checkout. |
 | `npm run setup:worktree` | Provisions this worktree's own Convex backend. Run once per checkout. |
 | `npm run dev` | Next.js dev server + Convex backend, in parallel. |
 | `npm test` | Runs Vitest (the `convex-test` suite). |
