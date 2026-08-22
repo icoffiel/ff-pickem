@@ -12,6 +12,7 @@ import type * as auth from "../auth.js";
 import type * as config from "../config.js";
 import type * as crons from "../crons.js";
 import type * as emailTransport from "../emailTransport.js";
+import type * as espn from "../espn.js";
 import type * as games from "../games.js";
 import type * as http from "../http.js";
 import type * as inviteEmail from "../inviteEmail.js";
@@ -32,6 +33,7 @@ declare const fullApi: ApiFromModules<{
   config: typeof config;
   crons: typeof crons;
   emailTransport: typeof emailTransport;
+  espn: typeof espn;
   games: typeof games;
   http: typeof http;
   inviteEmail: typeof inviteEmail;
