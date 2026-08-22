@@ -116,6 +116,12 @@ accounts are set up by a human:
   npx convex env set AUTH_EMAIL_FROM onboarding@resend.dev
   ```
 
+  On a **dev** deployment you do not have to run those: both, plus
+  `JWT_PRIVATE_KEY` and `JWKS`, are the project's default environment variables
+  for the `dev` deployment type (#73), so a newly created dev deployment —
+  cloud or local — imports them and can sign in immediately. `SITE_URL` is the
+  one auth var still set per deployment. See `docs/deploy/auth-env.md`.
+
   Start sign-in, then copy the `[auth] magic link for …` line out of the
   `convex dev` output and open it. `console` is also the default when
   `AUTH_EMAIL_TRANSPORT` is unset — **production must set `resend`

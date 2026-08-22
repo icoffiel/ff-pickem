@@ -22,7 +22,7 @@ functions at runtime:
 
 | Tier | Browser URL | Convex deployment | `SITE_URL` value | How `SITE_URL` is set |
 | --- | --- | --- | --- | --- |
-| **dev** (local) | `http://localhost:3000` | `hidden-reindeer-734` | `http://localhost:3000` | `npx convex env set` (once) |
+| **dev** (local) | `http://localhost:3000` | `hidden-reindeer-734` (shared) or a per-worktree local deployment | the worktree's Next dev origin | `npx convex env set` (per deployment; the other four come from project defaults) |
 | **prod** | `https://ff-pickem.vercel.app` | `majestic-dalmatian-467` | `https://ff-pickem.vercel.app` | `npx convex env set --prod` (static; prod URL is stable) |
 | **preview** (per branch) | `https://ff-pickem-git-<branch>-icoffiels-projects.vercel.app` | per-branch `*.convex.cloud` | dynamic per branch | **deferred** — see below |
 
@@ -55,12 +55,58 @@ alias would send every invitee's magic link to a login wall they can't pass.
 
 ## JWT keypair
 
-Each deployment gets its **own fresh** RS256 keypair — dev's key is never reused
-for prod. The pair is generated in the exact shape `@convex-dev/auth@0.0.94`
-produces (`bin.cjs`: PKCS8 PEM with newlines replaced by spaces for
-`JWT_PRIVATE_KEY`; `{"keys":[{"use":"sig",…publicJWK}]}` for `JWKS`), then set
-via `npx convex env set --prod --from-file` so the secret never lands in shell
-history. Equivalent one-shot: `npx @convex-dev/auth --prod` (interactive).
+**Prod has its own keypair; all dev deployments share one.** Prod's key is never
+reused for dev, and vice versa. Within dev the same pair is reused across every
+deployment — it is a project default (below) — because dev session tokens are
+low-value and per-deployment generation only adds a bootstrap step.
+
+The pair is generated in the exact shape `@convex-dev/auth@0.0.94` produces
+(`bin.cjs`: PKCS8 PEM with newlines replaced by spaces for `JWT_PRIVATE_KEY`;
+`{"keys":[{"use":"sig",…publicJWK}]}` for `JWKS` — RSA-2048, `e=65537`), then
+set with `--from-file` so the secret never lands in shell history. Equivalent
+one-shot for a single deployment: `npx @convex-dev/auth` (interactive).
+
+The dev keypair was **rotated on 2026-08-21** (#73): the previous one had been
+printed into an agent session log, so a fresh pair was generated, seeded as the
+dev project default, and written over the shared dev deployment. Prod was
+untouched — it never held the leaked pair.
+
+## Project env var defaults — dev (#73)
+
+A brand-new dev deployment must be able to complete a sign-in without anyone
+hand-seeding it. Convex supports **project-level default environment variables
+per deployment type**, and the four Convex-side auth vars that are the same for
+every dev deployment are set there:
+
+| Default | Value |
+| --- | --- |
+| `JWT_PRIVATE_KEY` | shared dev private key (secret) |
+| `JWKS` | matching public JWK set |
+| `AUTH_EMAIL_TRANSPORT` | `console` |
+| `AUTH_EMAIL_FROM` | `onboarding@resend.dev` |
+
+```sh
+npx convex env default list --type dev              # inspect
+npx convex env default set NAME --from-file f.txt   # write a secret
+```
+
+They can also be edited under Project Settings in the Convex dashboard.
+
+Two behaviours worth knowing, both verified against the CLI (`convex@1.42.3`)
+rather than inferred from docs:
+
+- Defaults apply to **local** deployments too, not only cloud ones. Creating one
+  prints `Importing default env vars…` / `Imported 4 environment variables from
+  default environment variables: …`.
+- Defaults apply only to **newly created** deployments and are **not kept in
+  sync** afterwards. Changing a default leaves existing deployments alone; they
+  need `npx convex env set` (which is how the 2026-08-21 rotation reached the
+  shared dev deployment).
+
+**`SITE_URL` is deliberately not a default.** It must equal the origin the
+browser actually visits, which differs per worktree/port, so a single project
+value would be wrong for most deployments. It stays a per-deployment setting —
+the one auth var a new dev deployment still has to be told about.
 
 ## Preview-deployment auth — deferred
 
@@ -73,11 +119,14 @@ to #30, the L3 CI gate). Captured plan for when it is picked up:
   to the Convex runtime, so they must be written into Convex explicitly.
 - `SITE_URL` is read at sign-in (runtime), so setting it after `convex deploy`
   is functionally fine.
-- **Open questions to verify first:** (1) does `npx convex env set` during a
-  Vercel build with a **preview** `CONVEX_DEPLOY_KEY` reliably target the correct
-  per-branch deployment? (2) key strategy for ephemeral previews — shared
-  keypair vs per-deployment, and how `JWT_PRIVATE_KEY`/`JWKS` reach them (Convex
-  dashboard "Preview default environment variables"?).
+- **Open question to verify first:** does `npx convex env set` during a Vercel
+  build with a **preview** `CONVEX_DEPLOY_KEY` reliably target the correct
+  per-branch deployment?
+- **How the keys reach a preview is now answered** by the dev work in #73:
+  `npx convex env default --type preview` seeds `JWT_PRIVATE_KEY`/`JWKS`/
+  `AUTH_EMAIL_TRANSPORT`/`AUTH_EMAIL_FROM` into every newly created preview
+  deployment, exactly as it does for dev. Only `SITE_URL` remains dynamic, which
+  is what the build-command bridge above is for.
 
 ## Vercel Deployment Protection — which URLs are gated
 
