@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 
 import { Doc, Id } from "./_generated/dataModel";
-import { internalMutation } from "./_generated/server";
+import { internalMutation, internalQuery } from "./_generated/server";
 import { ScheduledGame } from "./nflverse";
 
 // The `games` write layer. `games` is pure synced NFL truth — no per-league data,
@@ -63,8 +63,16 @@ function alreadyMatches(existing: Doc<"games">, fields: GameFields): boolean {
   );
 }
 
-/** Who won, from the two scores. A level game is a tie, not a home win. */
-function outcomeOf(
+/**
+ * Who won, from the two scores. A level game is a tie, not a home win.
+ *
+ * Exported because writing this is the whole of grading: `pick.result` is
+ * derived from a game's outcome downstream (M4/M5), so there is no separate
+ * grading step to get wrong. Both sync paths share the one rule rather than
+ * spelling it twice — a winner rule that disagrees with itself by source is a
+ * week that grades differently depending on which feed got there first.
+ */
+export function outcomeOf(
   homeScore: number,
   awayScore: number,
 ): "home" | "away" | "tie" {
@@ -200,5 +208,197 @@ export const applySchedule = internalMutation({
     }
 
     return { inserted, updated, unchanged, kickoffMoved };
+  },
+});
+
+/**
+ * How long before kickoff the live sync starts watching a game.
+ *
+ * A purely trailing window would leave a game reading `scheduled` for up to a
+ * full cron interval after the opening snap. Opening early costs one extra
+ * fetch per week and makes the first tick after kickoff the one that catches it.
+ */
+export const LIVE_WINDOW_BEFORE_KICKOFF_MS = 15 * 60 * 1000;
+
+/**
+ * How long after kickoff the live sync keeps watching a game.
+ *
+ * Comfortably past any real game — a broadcast runs a little over three hours,
+ * and overtime adds well under one. Deliberately shorter than
+ * `FINAL_AFTER_KICKOFF_MS`, so the two sources hand off cleanly: ESPN finals a
+ * game inside five hours, and the schedule sync's age guard picks up anything
+ * ESPN missed from six hours on, rather than the two overlapping.
+ */
+export const LIVE_WINDOW_AFTER_KICKOFF_MS = 5 * 60 * 60 * 1000;
+
+/** A season and week the live sync should ask ESPN about. */
+export type WeekInPlay = { season: number; week: number };
+
+/** The statuses a game can still move on from. A finaled game is done. */
+const UNFINISHED = ["scheduled", "in_progress"] as const;
+
+/**
+ * The weeks with at least one unfinished game inside its kickoff window — the
+ * live sync's gate, and the whole reason a 15-minute cron is affordable
+ * year-round. Out of season every run reads this, finds nothing, and stops
+ * before spending a fetch.
+ *
+ * **`now` is an argument, not a `Date.now()` inside the query.** A Convex query
+ * re-runs when the data it reads changes, never because time passed, so a clock
+ * read here would silently go stale (ADR 0002). The caller is the sync action,
+ * so the value is still the server's — and this is an `internalQuery`, so no
+ * client can supply one.
+ */
+export const weeksInPlay = internalQuery({
+  args: { now: v.number() },
+  handler: async (ctx, args): Promise<WeekInPlay[]> => {
+    const weeks = new Map<string, WeekInPlay>();
+
+    for (const status of UNFINISHED) {
+      const inWindow = await ctx.db
+        .query("games")
+        .withIndex("by_status_kickoff", (q) =>
+          q
+            .eq("status", status)
+            .gte("kickoffAt", args.now - LIVE_WINDOW_AFTER_KICKOFF_MS)
+            .lte("kickoffAt", args.now + LIVE_WINDOW_BEFORE_KICKOFF_MS),
+        )
+        .collect();
+
+      for (const game of inWindow) {
+        // One fetch covers a whole week, so sixteen live games are one ask.
+        weeks.set(`${game.season}:${game.week}`, {
+          season: game.season,
+          week: game.week,
+        });
+      }
+    }
+
+    return [...weeks.values()].sort(
+      (a, b) => a.season - b.season || a.week - b.week,
+    );
+  },
+});
+
+/** One ESPN scoreboard event, as `applyLiveEvents` accepts it over the wire. */
+const liveEvent = v.object({
+  homeTeam: v.string(),
+  awayTeam: v.string(),
+  homeScore: v.number(),
+  awayScore: v.number(),
+  status: v.union(
+    v.literal("scheduled"),
+    v.literal("in_progress"),
+    v.literal("final"),
+  ),
+});
+
+/** What one pass of `applyLiveEvents` did. Named so `sync.ts` can annotate its
+ * action's return type without inferring it back through the generated `api`. */
+export type LiveUpsert = {
+  updated: number;
+  /** Readings that told us nothing new — including every pre-kickoff event. */
+  unchanged: number;
+  /** Events that matched no row, as `"AWAY @ HOME"`. See `applyLiveEvents`. */
+  unmatched: string[];
+};
+
+/**
+ * Apply one week's ESPN scoreboard to that week's `games` rows.
+ *
+ * Rows are matched on `(season, week, homeTeam, awayTeam)` — ESPN and nflverse
+ * share no game id, and the four together are unique within a season. The
+ * abbreviations must already be in nflverse's spelling; `parseScoreboard` does
+ * that (see `normalizeTeam`). Home and away are both part of the key on purpose:
+ * two clubs meet twice a season, once each way, and matching on the pair alone
+ * would grade the away fixture with the home fixture's score.
+ *
+ * Three rules decide what a reading is allowed to do:
+ *
+ * - **`final` always wins.** ESPN owns status; its `post` is the best "this game
+ *   is over" signal any free source publishes, and acting on it is what grades
+ *   the week.
+ * - **Nothing else may downgrade a `final`.** A flaky `pre` or `in` reading that
+ *   un-finaled a graded game would un-grade that week for every league picking
+ *   it — far worse than a few minutes of stale score.
+ * - **A `scheduled` reading writes nothing at all.** It says only what nflverse
+ *   already said, and ESPN ships placeholder `0`–`0` scores before kickoff:
+ *   storing those would make `mergeScheduledGame` count the game as scored and
+ *   final it as a tie once `FINAL_AFTER_KICKOFF_MS` passed.
+ *
+ * **An unmatched event is reported, not thrown.** One weird event should not
+ * stop the other fifteen games of a Sunday from syncing — but it is returned and
+ * logged, because a silent mismatch is a whole game that never grades.
+ */
+export const applyLiveEvents = internalMutation({
+  args: {
+    season: v.number(),
+    week: v.number(),
+    events: v.array(liveEvent),
+  },
+  handler: async (ctx, args): Promise<LiveUpsert> => {
+    const weekRows = await ctx.db
+      .query("games")
+      .withIndex("by_season_week", (q) =>
+        q.eq("season", args.season).eq("week", args.week),
+      )
+      .collect();
+    const byMatchup = new Map(
+      weekRows.map((row) => [`${row.awayTeam}@${row.homeTeam}`, row]),
+    );
+
+    const unmatched: string[] = [];
+    let updated = 0;
+    let unchanged = 0;
+
+    for (const event of args.events) {
+      const matchup = `${event.awayTeam}@${event.homeTeam}`;
+      const existing = byMatchup.get(matchup);
+      if (existing === undefined) {
+        unmatched.push(`${event.awayTeam} @ ${event.homeTeam}`);
+        continue;
+      }
+
+      const isFinal = event.status === "final";
+      if (
+        event.status === "scheduled" ||
+        (existing.status === "final" && !isFinal)
+      ) {
+        unchanged++;
+        continue;
+      }
+
+      const outcome = isFinal
+        ? outcomeOf(event.homeScore, event.awayScore)
+        : undefined;
+
+      // Most ticks find most games unchanged — a score moves every few minutes,
+      // not every fifteen seconds. Writing anyway would wake every subscription
+      // reading `games` on every tick of every game window.
+      if (
+        existing.status === event.status &&
+        existing.homeScore === event.homeScore &&
+        existing.awayScore === event.awayScore &&
+        (!isFinal || existing.outcome === outcome)
+      ) {
+        unchanged++;
+        continue;
+      }
+
+      // `patch`, not `replace`: the schedule sync owns every other column on
+      // this row, and ESPN has nothing to say about any of them. `outcome` is
+      // left off the object entirely unless the game finaled — a patch is a
+      // shallow merge, so an absent key keeps the stored value while an explicit
+      // `undefined` would *delete* it.
+      await ctx.db.patch(existing._id, {
+        status: event.status,
+        homeScore: event.homeScore,
+        awayScore: event.awayScore,
+        ...(isFinal ? { outcome } : {}),
+      });
+      updated++;
+    }
+
+    return { updated, unchanged, unmatched };
   },
 });

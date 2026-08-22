@@ -118,7 +118,7 @@ Milestones are ordered so each one is independently verifiable and unblocks the 
 ### M3 — NFL data sync
 - `games` table + `scheduleSync` (nflverse, 6h upsert by external `gameId`) and `liveSync` (ESPN, 15 min, self-gating; `state`→`status`; compute `outcome` on final).
 - ESPN↔nflverse matching on `(season, week, home, away)` — confirm team-abbreviation alignment.
-- **Verify:** a real week's schedule loads; scores + `status`/`outcome` update through a live game window (or a replayed one out of season).
+- [x] **Verify:** a real week's schedule loads; scores + `status`/`outcome` update through a live game window (or a replayed one out of season). Replayed out of season in `convex/sync.test.ts` against captured ESPN payloads: a week advances `scheduled` → `in_progress` → `final` with scores and outcomes, home-win, away-win and tie.
 
 ### M4 — The pick / lock / grade core
 - Slate derivation (Sat/Sun/Mon REG filter), derived active week, `lock(league, week) = min slate kickoff`.
@@ -143,9 +143,11 @@ Per the project's verify-the-API rule (`CLAUDE.md`), confirm each against the **
 
 - `@convex-dev/auth` — the `authTables` import path and the Convex Auth + Resend provider setup surface.
 - `convex/server` — the `defineTable` / `v` validator surface used in the schema.
-- `convex/server` crons — the `crons.ts` interval/cron API used by `scheduleSync` / `liveSync`.
-- **Resend free-tier limits** (3,000/mo · 100/day) and **Convex free-tier function-invocation limit** vs a 15-min year-round `liveSync` (96 runs/day even when self-gated). Cheap fallback if it doesn't fit: restrict `liveSync` to in-season months via a cron expression (see [`weekly-loop.md`](./weekly-loop.md) §4).
-- **nflverse `games` dataset** field names + `gameday`/`gametime` (ET) → UTC `kickoffAt` conversion; **ESPN scoreboard** `state` values.
+- [x] `convex/server` crons — the `crons.ts` interval/cron API used by `scheduleSync` / `liveSync`. Confirmed against the installed `convex@1.42.3`: `cronJobs()` + `crons.interval(name, { hours } | { minutes }, fn, args)`. Both jobs are registered and asserted in `convex/crons.test.ts`.
+- **Resend free-tier limits** (3,000/mo · 100/day) — still open, and a go-live rather than a build concern (#22).
+- [x] **Convex free-tier function-invocation limit** vs a 15-min year-round `liveSync`. The free tier includes **1M function calls/month**, and "scheduled executions" are what count ([convex.dev/pricing](https://www.convex.dev/pricing), checked 2026-08-21). 96 runs/day is **~2,900/month, about 0.3%** — and ~5,800 (0.6%) even if each run's internal gate query were billed separately. **The in-season cron expression held in reserve is therefore not needed and is not built**; `liveSync` runs year-round and self-gates against the database before spending a fetch.
+- [x] **nflverse `games` dataset** field names + `gameday`/`gametime` (ET) → UTC `kickoffAt` conversion (M3a). Columns are resolved by name, so an upstream rename fails loudly.
+- [x] **ESPN scoreboard** `state` values — `pre` / `in` / `post`, confirmed live 2026-08-21. `pre` and `post` off NFL responses; `in` off the same shared schema on a sport that had a game running (`STATUS_IN_PROGRESS`, `STATUS_HALFTIME`, `STATUS_FIRST_HALF` all report `state: "in"`). An unrecognized state throws rather than being guessed at. Two further traps found and recorded in `CONTEXT.md` § Upstream sources: the season must go in `dates` (`year` is silently ignored), and ESPN's `LAR`/`WSH` must be rewritten to nflverse's `LA`/`WAS` before matching.
 
 ## Out of scope (parked as future efforts)
 
