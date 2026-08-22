@@ -40,6 +40,10 @@ _Avoid_: Magic link (that is the auth mechanism, not the grant)
 A single NFL game — the global, league-agnostic fact: teams, week, season, kickoff, scores, and outcome. Shared by every League; no League owns a Game. Identified across syncs by the upstream nflverse `game_id`, which is **`season_week_AWAY_HOME`** — **away team first**. `2026_01_NE_SEA` is New England *at* Seattle. Read the home and away teams off the `home_team`/`away_team` columns, never out of the id: reading it left-to-right lands every score on the wrong team, and the mistake is invisible until a week grades backwards.
 _Avoid_: Match, fixture, matchup
 
+**Team abbreviation**:
+A club's short code. The two upstream sources spell 30 of the 32 clubs identically and disagree on two: the Rams are ESPN's `LAR` and nflverse's `LA`, and the Commanders are ESPN's `WSH` and nflverse's `WAS`. **nflverse's spelling is the one a Game carries** — it is the schedule source of record, so its codes are the ones already in the database, and anything read off ESPN is rewritten into that spelling before it is matched. A Game shares no id with ESPN, so matching is on `(season, week, home, away)`: without the rewrite those two games a week would match no Game and would silently never score or grade.
+_Avoid_: Team code, team id (ESPN's numeric `team.id` is a different thing)
+
 **Outcome**:
 The result of a Game: the home team won, the away team won, or a **tie**. A property of the Game alone — it knows nothing about picks or scoring.
 
@@ -85,3 +89,14 @@ _Avoid_: Prediction, over/under
 **Standings**:
 The weekly and season rankings of a League's Memberships, derived from graded Picks (and Tiebreaker guesses for ties). Computed on read; never stored. Weekly points = correct Picks (push excluded, absent = 0); season points = the sum of weekly correct Picks. The weekly Tiebreaker guess settles the **weekly winner only** — it orders the weekly leaderboard but never changes point totals and never feeds the season. Season ties yield **co-champions**.
 _Avoid_: Leaderboard, rankings, scores
+
+## Upstream sources
+
+Two feeds stand behind a Game, and each has one trap that produces plausible-looking wrong data rather than an error. Both are recorded here because neither is discoverable from the code that avoids them.
+
+**nflverse** (`https://nflgamedata.com/games.csv`) — the schedule and the source of record. Its `game_id` is away-team-first; see **Game**.
+
+**ESPN's scoreboard** (unofficial, undocumented) — live status and scores. Two traps:
+
+- **The season goes in the `dates` parameter. `year` is accepted and silently ignored.** A request for a past season with `year=` returns the *current* season's slate — right shape, right week count, wrong year — so the failure looks like correct data. Confirmed 2026-08-21 by fetching 2025 week 1 both ways: `dates=2025` returned DAL @ PHI on 2025-09-05, `year=2025` returned NE @ SEA on 2026-09-10. Everything written is therefore keyed off the season and week the *payload* states, never the ones the request asked for.
+- **Its team abbreviations are not nflverse's**; see **Team abbreviation**.
