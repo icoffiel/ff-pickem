@@ -1,0 +1,25 @@
+# Orca repo hooks.
+#
+# Orca reads this file from the repository and runs `scripts.setup` inside a
+# newly created worktree. Committing it here — rather than leaving the command
+# in each person's Orca settings — is what makes a fresh clone of this repo
+# usable without anyone remembering to configure it.
+#
+# Recognised top-level keys are `scripts`, `issueCommand`, `defaultTabs`,
+# `environmentRecipes` and `worktree`; `scripts` takes `setup` and `archive`.
+scripts:
+  # A new worktree starts with no node_modules and no Convex configuration —
+  # both are git-ignored — so `npm run dev` has nothing to run against. This
+  # installs, provisions an isolated Convex backend for the worktree, pins its
+  # Next dev port and sets SITE_URL to match.
+  #
+  # Kept to one command on purpose: Orca runs hooks through cmd.exe on Windows
+  # and /bin/bash elsewhere, and npm does its own shell-appropriate chaining.
+  #
+  # Orca gives a hook 2 minutes. That is comfortable once Convex's local backend
+  # binary is cached for the machine, but the very first worktree on a new
+  # machine also downloads it and can overrun; if that happens the hook is
+  # killed mid-flight and `npm run setup` finishes the job when re-run by hand.
+  #
+  # See docs/deploy/worktree-backends.md.
+  setup: npm run setup

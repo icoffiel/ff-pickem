@@ -7,6 +7,11 @@
 next-env.d.ts
 
 # convex
+# This worktree's local deployment: the SQLite state and admin key `npm run
+# setup:worktree` provisions. The CLI drops its own .convex/.gitignore too;
+# this line states the intent where the rest of the repo's ignores live.
+/.convex/
+
 # NOTE: convex/_generated is deliberately NOT ignored. Convex generates it from
 # convex/ and states it "should be committed to the repo (your code won't
 # typecheck without it!)" — `npx convex codegen --help`. Ignoring it breaks any

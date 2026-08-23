@@ -22,7 +22,7 @@ functions at runtime:
 
 | Tier | Browser URL | Convex deployment | `SITE_URL` value | How `SITE_URL` is set |
 | --- | --- | --- | --- | --- |
-| **dev** (local) | `http://localhost:3000` | `hidden-reindeer-734` (shared) or a per-worktree local deployment | the worktree's Next dev origin | `npx convex env set` (per deployment; the other four come from project defaults) |
+| **dev** (local) | `http://localhost:<pinned port>` | a per-worktree local deployment (or the shared `hidden-reindeer-734`) | the worktree's Next dev origin | `npm run setup:worktree` (the other four come from project defaults) |
 | **prod** | `https://ff-pickem.vercel.app` | `majestic-dalmatian-467` | `https://ff-pickem.vercel.app` | `npx convex env set --prod` (static; prod URL is stable) |
 | **preview** (per branch) | `https://ff-pickem-git-<branch>-icoffiels-projects.vercel.app` | per-branch `*.convex.cloud` | dynamic per branch | **deferred** — see below |
 
@@ -107,7 +107,9 @@ rather than inferred from docs:
 **`SITE_URL` is deliberately not a default.** It must equal the origin the
 browser actually visits, which differs per worktree/port, so a single project
 value would be wrong for most deployments. It stays a per-deployment setting —
-the one auth var a new dev deployment still has to be told about.
+the one auth var a new dev deployment still has to be told about, which is step
+three of `npm run setup:worktree`
+([worktree-backends.md](./worktree-backends.md)).
 
 ## Preview-deployment auth — deferred
 

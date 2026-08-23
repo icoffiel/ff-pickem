@@ -29,30 +29,46 @@ query. No schema, auth, or domain logic yet — those are M1+.
 ## Prerequisites
 
 - Node.js 20+ and npm.
-- A Convex account (the local dev flow below provisions a project on first run).
+- A Convex account with access to the `iain-coffield/ff-pickem` project, logged
+  in on this machine (`npx convex login`). `npm run setup:worktree` registers
+  this worktree's deployment with that project.
 
 ## Setup & running
 
 ```bash
 npm install
 
-# One command boots both the Next.js app and the Convex backend in parallel.
-# On the very first run, Convex provisions a dev deployment and writes
-# .env.local with NEXT_PUBLIC_CONVEX_URL — follow its prompts.
+# Gives this checkout its own isolated Convex backend: provisions a local
+# deployment, pins a Next dev port, and sets SITE_URL to match. Non-interactive
+# and safe to re-run.
+npm run setup:worktree
+
+# Boots the Next.js app and the Convex backend in parallel.
 npm run dev
 ```
 
-Open http://localhost:3000 — the landing page shows **`pong`** fetched live from
-the `ping` Convex query, proving the round-trip.
+Open the URL `npm run setup:worktree` printed (http://localhost:3000 in the first
+checkout) — the landing page shows **`pong`** fetched live from the `ping` Convex
+query, proving the round-trip.
+
+Run `npm run setup:worktree` **once per checkout or git worktree**. Each one gets
+its own backend, so two branches can run at the same time without sharing a
+schema or a row — copying `.env.local` across from another checkout is exactly
+what it exists to avoid.
+[`docs/deploy/worktree-backends.md`](./docs/deploy/worktree-backends.md) covers
+the rest: why local is the default and its beta limits, when to reach for a cloud
+dev deployment instead, and how to tear a worktree's backend down.
 
 `npm run dev` runs `next dev` and `convex dev` together (via `npm-run-all2`).
-`.env.local` is written by Convex and is git-ignored; see
-[`.env.example`](./.env.example) for the variables.
+`.env.local` is written by Convex and by the setup command, and is git-ignored;
+see [`.env.example`](./.env.example) for the variables.
 
 ## Scripts
 
 | Command | What it does |
 |---|---|
+| `npm run setup` | `npm install` + `setup:worktree`. One command for a fresh checkout. |
+| `npm run setup:worktree` | Provisions this worktree's own Convex backend. Run once per checkout. |
 | `npm run dev` | Next.js dev server + Convex backend, in parallel. |
 | `npm test` | Runs Vitest (the `convex-test` suite). |
 | `npm run typecheck` | `tsc --noEmit`. |
