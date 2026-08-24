@@ -63,6 +63,46 @@ dev deployment instead, and how to tear a worktree's backend down.
 `.env.local` is written by Convex and by the setup command, and is git-ignored;
 see [`.env.example`](./.env.example) for the variables.
 
+## Orca worktrees
+
+[`orca.yaml`](./orca.yaml) at the repo root declares the setup command as a
+worktree hook:
+
+```yaml
+scripts:
+  setup: npm run setup # npm install, then setup:worktree
+```
+
+Orca runs that inside each newly created worktree, so a worktree made through
+Orca arrives with dependencies installed and a Convex backend of its own. The
+file is committed, so it travels with the repo and works on any machine for
+anyone, rather than living in one person's Orca settings.
+
+**One switch, once per machine.** Orca's per-repo `commandSourcePolicy` decides
+where the setup command comes from, and a repo that was configured with a
+*local* setup command before `orca.yaml` existed keeps using that one and
+ignores this file entirely. Changing it is UI-only — no `orca` CLI command
+writes this setting:
+
+> Sidebar → hover the repo → ⋯ → **Project Settings** → **Worktree Hooks** →
+> **Command source** → `orca.yaml only`, then clear the local **Setup Script**
+> box.
+
+Read the setting back rather than trusting the UI selection:
+
+```sh
+orca repo list --json   # this repo's entry should show "commandSourcePolicy": "shared-only"
+```
+
+A repo Orca has never been given a local setup command for needs none of this:
+it defaults to `shared-only` and picks up `orca.yaml` on its own.
+[`docs/deploy/worktree-backends.md`](./docs/deploy/worktree-backends.md#running-it-automatically-orca)
+covers the rest, including the 2-minute hook timeout and what to do when the
+first worktree on a new machine overruns it.
+
+Outside Orca — a plain `git clone` or `git worktree add` — nothing runs the hook
+for you; that is what [Setup & running](#setup--running) is for.
+
 ## Scripts
 
 | Command | What it does |
