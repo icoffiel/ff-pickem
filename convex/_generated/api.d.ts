@@ -14,13 +14,16 @@ import type * as crons from "../crons.js";
 import type * as emailTransport from "../emailTransport.js";
 import type * as espn from "../espn.js";
 import type * as games from "../games.js";
+import type * as grading from "../grading.js";
 import type * as http from "../http.js";
 import type * as inviteEmail from "../inviteEmail.js";
 import type * as invites from "../invites.js";
 import type * as leagues from "../leagues.js";
 import type * as nflverse from "../nflverse.js";
+import type * as picks from "../picks.js";
 import type * as sync from "../sync.js";
 import type * as users from "../users.js";
+import type * as week from "../week.js";
 
 import type {
   ApiFromModules,
@@ -35,13 +38,16 @@ declare const fullApi: ApiFromModules<{
   emailTransport: typeof emailTransport;
   espn: typeof espn;
   games: typeof games;
+  grading: typeof grading;
   http: typeof http;
   inviteEmail: typeof inviteEmail;
   invites: typeof invites;
   leagues: typeof leagues;
   nflverse: typeof nflverse;
+  picks: typeof picks;
   sync: typeof sync;
   users: typeof users;
+  week: typeof week;
 }>;
 
 /**

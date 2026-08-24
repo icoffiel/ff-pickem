@@ -60,6 +60,9 @@ function Roster({ leagueId }: { leagueId: Id<"leagues"> }) {
 
   return (
     <div>
+      <p>
+        <Link href={`/leagues/${leagueId}/picks`}>Make picks →</Link>
+      </p>
       <section>
         <h2>Members</h2>
         <ul>
