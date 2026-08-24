@@ -245,10 +245,10 @@ export const pickSheet = query({
 
     // The index orders by (season, week), not by kickoff, so a week's games come
     // back in insertion order and the screen has to be sorted deliberately.
-    const weekSlate = counted
+    const thisWeeksSlate = counted
       .filter((game) => game.week === week)
       .sort((a, b) => a.kickoffAt - b.kickoffAt);
-    const locksAt = lock(weekSlate);
+    const locksAt = lock(thisWeeksSlate);
 
     const picks = await ctx.db
       .query("picks")
@@ -285,9 +285,9 @@ export const pickSheet = query({
       // A week with no derivable deadline has nothing to pick, so it reads as
       // shut rather than as permanently open.
       locked: locksAt === undefined || args.now >= locksAt,
-      tiebreakerGameId: tiebreakerGame(weekSlate)?._id ?? null,
+      tiebreakerGameId: tiebreakerGame(thisWeeksSlate)?._id ?? null,
       tiebreakerGuess: guess?.points ?? null,
-      games: weekSlate.map((game) => {
+      games: thisWeeksSlate.map((game) => {
         const selection = selectionByGame.get(game._id);
         return {
           gameId: game._id,
