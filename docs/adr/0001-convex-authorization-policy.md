@@ -75,5 +75,11 @@ or the "anyone can access" risk becomes real once features ship.
   gated by auth tokens, not URL secrecy.
 - Reviewers of any M1+ PR that adds a mutation or a domain-table query should
   treat the five authorization rules above as a checklist and block on gaps.
+- Rules 1-3 are implemented once, in `convex/membership.ts`
+  ([#78](https://github.com/icoffiel/ff-pickem/issues/78)): `requireMembership`
+  for any league read/write, `requireCommissioner` for a commissioner action.
+  New league functions call those rather than spelling the guard out again — a
+  hand-rolled copy is how the rules drift. `findMembership` is the non-throwing
+  lookup for the cases that are asking a question rather than gating a caller.
 - Re-run a security review at the end of the first milestone that ships
   mutations, when there is a real authorization surface to test.

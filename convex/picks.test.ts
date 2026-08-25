@@ -374,6 +374,18 @@ test("a removed member cannot guess", async () => {
   expect(code).toBe("NotMember");
 });
 
+test("a signed-out caller cannot guess", async () => {
+  const t = convexTest(schema, modules);
+  const { leagueId } = await leagueWithCommissioner(t);
+  await insertGame(t, 1);
+
+  const code = await refusalCode(
+    t.mutation(api.picks.setTiebreakerGuess, { leagueId, week: 1, points: 47 }),
+  );
+
+  expect(code).toBe("NotSignedIn");
+});
+
 test("a guess must be a whole, non-negative number of points", async () => {
   const t = convexTest(schema, modules);
   const { as, leagueId } = await leagueWithCommissioner(t);
@@ -670,4 +682,16 @@ test("the pick sheet is refused to someone with no membership", async () => {
   );
 
   expect(code).toBe("NotMember");
+});
+
+test("the pick sheet is refused to a signed-out caller", async () => {
+  const t = convexTest(schema, modules);
+  const { leagueId } = await leagueWithCommissioner(t);
+  await insertWeekOne(t);
+
+  const code = await refusalCode(
+    t.query(api.picks.pickSheet, { leagueId, now: NOW() }),
+  );
+
+  expect(code).toBe("NotSignedIn");
 });

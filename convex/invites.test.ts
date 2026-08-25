@@ -9,6 +9,9 @@ import schema from "./schema";
 
 const modules = import.meta.glob("./**/*.ts");
 
+/** The schema-typed test handle, so a helper can read `ctx.db` by index. */
+type TestConvex = ReturnType<typeof convexTest<typeof schema.tables>>;
+
 const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000;
 
 /**
@@ -55,6 +58,26 @@ async function addMember(
       joinedAt: Date.now(),
     });
     return userId;
+  });
+}
+
+/** Take an existing membership out of the league, as the commissioner would. */
+async function removeMembership(
+  t: TestConvex,
+  leagueId: Id<"leagues">,
+  userId: Id<"users">,
+) {
+  await t.run(async (ctx) => {
+    const membership = await ctx.db
+      .query("memberships")
+      .withIndex("by_league_user", (q) =>
+        q.eq("leagueId", leagueId).eq("userId", userId),
+      )
+      .unique();
+    await ctx.db.patch(membership!._id, {
+      status: "removed",
+      removedAt: Date.now(),
+    });
   });
 }
 
@@ -199,7 +222,32 @@ test("createInvite rejects an outsider who is not a member of the league", async
       leagueId,
       email: "sister@example.com",
     }),
-  ).rejects.toThrow(/NotCommissioner/);
+  ).rejects.toThrow(/NotMember/);
+});
+
+test("createInvite rejects a removed commissioner", async () => {
+  const t = convexTest(schema, modules);
+  const { as, leagueId, userId } = await withLeague(t);
+  await removeMembership(t, leagueId, userId);
+
+  await expect(
+    as.mutation(api.invites.createInvite, {
+      leagueId,
+      email: "sister@example.com",
+    }),
+  ).rejects.toThrow(/NotMember/);
+});
+
+test("createInvite refuses a signed-out caller", async () => {
+  const t = convexTest(schema, modules);
+  const { leagueId } = await withLeague(t);
+
+  await expect(
+    t.mutation(api.invites.createInvite, {
+      leagueId,
+      email: "sister@example.com",
+    }),
+  ).rejects.toThrow(/NotSignedIn/);
 });
 
 test("createInvite short-circuits with alreadyMember when the email is an active member", async () => {
@@ -538,6 +586,31 @@ test("leagueRoster rejects a caller who is not a member of the league", async ()
   await expect(
     outsider.as.query(api.invites.leagueRoster, { leagueId, now: Date.now() }),
   ).rejects.toThrow(/NotMember/);
+});
+
+test("leagueRoster rejects a member the commissioner has removed", async () => {
+  const t = convexTest(schema, modules);
+  const { leagueId } = await withLeague(t);
+  const removedId = await addMember(
+    t,
+    leagueId,
+    "removed@example.com",
+    "removed",
+  );
+  const asRemoved = t.withIdentity({ subject: `${removedId}|session` });
+
+  await expect(
+    asRemoved.query(api.invites.leagueRoster, { leagueId, now: Date.now() }),
+  ).rejects.toThrow(/NotMember/);
+});
+
+test("leagueRoster refuses a signed-out caller", async () => {
+  const t = convexTest(schema, modules);
+  const { leagueId } = await withLeague(t);
+
+  await expect(
+    t.query(api.invites.leagueRoster, { leagueId, now: Date.now() }),
+  ).rejects.toThrow(/NotSignedIn/);
 });
 
 test("leagueRoster returns the member roster to a member", async () => {
