@@ -1,45 +1,17 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
 import { ConvexError, v } from "convex/values";
 
 import { Doc, Id } from "./_generated/dataModel";
 import { mutation, MutationCtx, query, QueryCtx } from "./_generated/server";
 import { effectiveOutcome, gradePick } from "./grading";
+import { requireMembership } from "./membership";
 import { activeWeek, lock, slate, tiebreakerGame } from "./week";
 
 // The pick / lock / grade core's Convex seam. The rules themselves live in
 // `week.ts` and `grading.ts`, pure and separately tested; what only exists here
-// is the part that needs a database and a clock — who may write, whether the
-// week is still open, and one row per (membership, game).
-
-/**
- * The caller's own active membership in this league, or a refusal.
- *
- * Identity is derived server-side and the membership is looked up from it —
- * never taken as an argument — so a caller cannot pick as someone else
- * (ADR 0001 rules 1 and 2). A `removed` membership is refused exactly like a
- * missing one: a commissioner who takes someone out has taken them out of the
- * competition, and that member stops being able to submit anything (#12).
- */
-async function callerMembership(
-  ctx: QueryCtx,
-  leagueId: Id<"leagues">,
-): Promise<Doc<"memberships">> {
-  const userId = await getAuthUserId(ctx);
-  if (userId === null) {
-    throw new ConvexError({ code: "NotSignedIn" });
-  }
-
-  const membership = await ctx.db
-    .query("memberships")
-    .withIndex("by_league_user", (q) =>
-      q.eq("leagueId", leagueId).eq("userId", userId),
-    )
-    .unique();
-  if (membership === null || membership.status !== "active") {
-    throw new ConvexError({ code: "NotMember" });
-  }
-  return membership;
-}
+// is the part that needs a database and a clock — whether the week is still
+// open, and one row per (membership, game). Who may write is `membership.ts`:
+// `requireMembership` is ADR 0001 rules 1 and 2, so nobody picks as someone
+// else and a removed member submits nothing (#12).
 
 /** The league behind a membership the caller has already been granted. */
 async function leagueOf(
@@ -104,7 +76,7 @@ export const makePick = mutation({
     selection: v.union(v.literal("home"), v.literal("away")),
   },
   handler: async (ctx: MutationCtx, args) => {
-    const membership = await callerMembership(ctx, args.leagueId);
+    const membership = await requireMembership(ctx, args.leagueId);
     const league = await leagueOf(ctx, args.leagueId);
 
     const game = await ctx.db.get(args.gameId);
@@ -166,7 +138,7 @@ export const setTiebreakerGuess = mutation({
     points: v.number(),
   },
   handler: async (ctx: MutationCtx, args) => {
-    const membership = await callerMembership(ctx, args.leagueId);
+    const membership = await requireMembership(ctx, args.leagueId);
     const league = await leagueOf(ctx, args.leagueId);
 
     // A combined score: whole points, never negative. `v.number()` is a float
@@ -224,7 +196,7 @@ export const pickSheet = query({
     now: v.number(),
   },
   handler: async (ctx: QueryCtx, args) => {
-    const membership = await callerMembership(ctx, args.leagueId);
+    const membership = await requireMembership(ctx, args.leagueId);
     const league = await leagueOf(ctx, args.leagueId);
 
     // One walk of the league's season: a season is ~272 rows, and the active

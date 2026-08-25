@@ -61,6 +61,8 @@ function refusalMessage(error: unknown): string {
       return "That game isn't part of this week's slate.";
     case "NotMember":
       return "You're not an active member of this league.";
+    case "NotSignedIn":
+      return "Your session has ended. Sign in again to make picks.";
     case "InvalidGuess":
       return "A tiebreaker guess must be a whole number of points.";
     case "NoSlate":

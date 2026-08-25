@@ -4,6 +4,11 @@ import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import { Doc } from "./_generated/dataModel";
 import { mutation, query, QueryCtx } from "./_generated/server";
+import {
+  findMembership,
+  requireCommissioner,
+  requireMembership,
+} from "./membership";
 
 const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000;
 
@@ -77,25 +82,7 @@ export function isRedeemable(invite: Doc<"invites">, now: number): boolean {
 export const createInvite = mutation({
   args: { leagueId: v.id("leagues"), email: v.string() },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (userId === null) {
-      throw new ConvexError({ code: "NotCommissioner" });
-    }
-
-    // Authz: an active commissioner of *this* league, or nothing.
-    const caller = await ctx.db
-      .query("memberships")
-      .withIndex("by_league_user", (q) =>
-        q.eq("leagueId", args.leagueId).eq("userId", userId),
-      )
-      .unique();
-    if (
-      caller === null ||
-      caller.role !== "commissioner" ||
-      caller.status !== "active"
-    ) {
-      throw new ConvexError({ code: "NotCommissioner" });
-    }
+    await requireCommissioner(ctx, args.leagueId);
 
     const targetEmail = normalizeEmail(args.email);
 
@@ -104,13 +91,10 @@ export const createInvite = mutation({
       .query("users")
       .withIndex("email", (q) => q.eq("email", targetEmail))
       .collect();
+    // A lookup, not the guard: this asks about the *invitee*, and answers with
+    // a return value rather than a refusal (the caller has already been let in).
     for (const user of usersWithEmail) {
-      const membership = await ctx.db
-        .query("memberships")
-        .withIndex("by_league_user", (q) =>
-          q.eq("leagueId", args.leagueId).eq("userId", user._id),
-        )
-        .unique();
+      const membership = await findMembership(ctx, args.leagueId, user._id);
       if (membership !== null && membership.status === "active") {
         return { status: "alreadyMember" as const };
       }
@@ -197,13 +181,10 @@ export const redeem = mutation({
 
     // One membership per (user, league) — Convex has no partial-unique
     // constraint, so this branch is what enforces it. It is also the single
-    // convergence point for "un-remove" and "accidental re-invite".
-    const existing = await ctx.db
-      .query("memberships")
-      .withIndex("by_league_user", (q) =>
-        q.eq("leagueId", invite.leagueId).eq("userId", userId),
-      )
-      .unique();
+    // convergence point for "un-remove" and "accidental re-invite", which is
+    // why it reads through the lookup and not the guard: the `removed` row a
+    // guard would refuse is exactly the one this branch exists to restore.
+    const existing = await findMembership(ctx, invite.leagueId, userId);
     if (existing === null) {
       await ctx.db.insert("memberships", {
         userId,
@@ -288,20 +269,7 @@ function withLeagueName(ctx: QueryCtx) {
 export const leagueRoster = query({
   args: { leagueId: v.id("leagues"), ...NOW_ARG },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (userId === null) {
-      throw new ConvexError({ code: "NotMember" });
-    }
-
-    const caller = await ctx.db
-      .query("memberships")
-      .withIndex("by_league_user", (q) =>
-        q.eq("leagueId", args.leagueId).eq("userId", userId),
-      )
-      .unique();
-    if (caller === null || caller.status !== "active") {
-      throw new ConvexError({ code: "NotMember" });
-    }
+    const caller = await requireMembership(ctx, args.leagueId);
 
     const memberships = await ctx.db
       .query("memberships")
