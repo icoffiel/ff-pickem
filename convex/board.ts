@@ -150,22 +150,25 @@ function combinedTotal(game: BoardGame | undefined): number | undefined {
 }
 
 /**
- * Number rows already in board order, sharing a rank between rows the sort
- * could not separate.
+ * Number rows already in board order, sharing a rank between rows nothing
+ * separated.
  *
  * Standard competition ranking: tied members share a rank and the next member
- * takes the place they would have had (1, 1, 3). `separator` is what the
- * tiebreaker managed to prise apart — equal separators are still a tie.
+ * takes the place they would have had (1, 1, 3), because a tie is a real tie
+ * until something breaks it. `points` is what they are ranked on — correct
+ * picks for a week, their sum for a season — and `separator` is whatever a
+ * tiebreaker then managed to prise apart. Equal on both is still a tie.
  */
-function assignRanks(
-  ordered: WeeklyRow[],
-  separator: (row: WeeklyRow) => number,
-): WeeklyRow[] {
+function assignRanks<Row extends { rank: number }>(
+  ordered: Row[],
+  points: (row: Row) => number,
+  separator: (row: Row) => number = () => 0,
+): Row[] {
   ordered.forEach((row, index) => {
     const previous = ordered[index - 1];
     row.rank =
       previous !== undefined &&
-      previous.correct === row.correct &&
+      points(previous) === points(row) &&
       separator(previous) === separator(row)
         ? previous.rank
         : index + 1;
@@ -182,6 +185,19 @@ function assignRanks(
  */
 function distance(row: WeeklyRow): number {
   return row.proximity ?? Number.POSITIVE_INFINITY;
+}
+
+/**
+ * Order two leaders by whose guess landed closer.
+ *
+ * Compared rather than subtracted: two members who both skipped the guess are
+ * each infinitely far, and `Infinity - Infinity` is `NaN` — which `sort` is
+ * specified to read as "equal", but only by way of a corner of the language
+ * nobody should have to know to read this.
+ */
+function closer(a: WeeklyRow, b: WeeklyRow): number {
+  if (distance(a) === distance(b)) return 0;
+  return distance(a) < distance(b) ? -1 : 1;
 }
 
 /**
@@ -208,6 +224,13 @@ function breakTie(
  *
  * `games` is the week's games as the database holds them; the league's slate
  * rule is applied here, so a game the rule-set drops scores for nobody.
+ *
+ * Of the rule-set this reads `slate` and `seasonScope` only. `weeklyTiebreaker`
+ * and `scoring` are schema stubs this loop — `mondayTotalPoints` and `flat` are
+ * the only literals built, and nothing can yet set a league to the others — so
+ * the fold applies them unconditionally rather than branching on a value that
+ * cannot vary (the same call `week.ts` makes for `lock`). Building `none`,
+ * `countBack` or `confidence` means branching here first.
  */
 export function weeklyBoard(input: {
   memberships: readonly StandingsMembership[];
@@ -262,14 +285,17 @@ export function weeklyBoard(input: {
   const state = breakTie(leaders, total !== undefined);
   const tiebroken = state === "settled" || state === "deadlocked";
   if (tiebroken) {
-    leaders.sort((a, b) => distance(a) - distance(b));
+    leaders.sort(closer);
     ordered.splice(0, leaders.length, ...leaders);
   }
 
   const leaderIds = new Set(leaders.map((row) => row.membershipId));
   return {
-    rows: assignRanks(ordered, (row) =>
-      tiebroken && leaderIds.has(row.membershipId) ? distance(row) : 0,
+    rows: assignRanks(
+      ordered,
+      (row) => row.correct,
+      (row) =>
+        tiebroken && leaderIds.has(row.membershipId) ? distance(row) : 0,
     ),
     tiebreaker: {
       gameId: designated?._id ?? null,
@@ -323,6 +349,10 @@ function byWeek<Row extends { week: number }>(
 /**
  * The season's ranked board.
  *
+ * `seasonTiebreaker` is a schema stub like the weekly one: `coChampions` is the
+ * only literal built, and it is the absence of a tiebreaker rather than one
+ * more rule — a tied season simply stays tied.
+ *
  * Season points are the **raw sum of weekly correct picks**, never a sum of
  * weekly placements — consistency is what wins a season, and a member who came
  * second every week beats one who won twice and vanished. Which is also why no
@@ -373,14 +403,12 @@ export function seasonBoard(input: {
     titleEligible: membership.status !== "removed",
   }));
 
-  const ordered = [...rows].sort((a, b) => b.points - a.points);
-  ordered.forEach((row, index) => {
-    const previous = ordered[index - 1];
-    row.rank =
-      previous !== undefined && previous.points === row.points
-        ? previous.rank
-        : index + 1;
-  });
+  // No separator: a tied season has no further tiebreaker to apply, which is
+  // exactly what `coChampions` means.
+  const ordered = assignRanks(
+    [...rows].sort((a, b) => b.points - a.points),
+    (row) => row.points,
+  );
 
   const contenders = ordered.filter((row) => row.titleEligible);
   const best = contenders[0]?.points;
