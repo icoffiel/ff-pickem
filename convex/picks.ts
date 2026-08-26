@@ -1,9 +1,9 @@
 import { ConvexError, v } from "convex/values";
 
-import { Doc, Id } from "./_generated/dataModel";
+import { Doc } from "./_generated/dataModel";
 import { mutation, MutationCtx, query, QueryCtx } from "./_generated/server";
 import { effectiveOutcome, gradePick } from "./grading";
-import { requireMembership } from "./membership";
+import { leagueOf, requireMembership } from "./membership";
 import { activeWeek, lock, slate, tiebreakerGame } from "./week";
 
 // The pick / lock / grade core's Convex seam. The rules themselves live in
@@ -12,18 +12,6 @@ import { activeWeek, lock, slate, tiebreakerGame } from "./week";
 // open, and one row per (membership, game). Who may write is `membership.ts`:
 // `requireMembership` is ADR 0001 rules 1 and 2, so nobody picks as someone
 // else and a removed member submits nothing (#12).
-
-/** The league behind a membership the caller has already been granted. */
-async function leagueOf(
-  ctx: QueryCtx,
-  leagueId: Id<"leagues">,
-): Promise<Doc<"leagues">> {
-  const league = await ctx.db.get(leagueId);
-  if (league === null) {
-    throw new ConvexError({ code: "NotMember" });
-  }
-  return league;
-}
 
 /** One week's counted games, in kickoff order off the index. */
 async function weekSlate(

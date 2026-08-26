@@ -67,6 +67,27 @@ export async function requireMembership(
 }
 
 /**
+ * The league behind a membership the caller has already been granted.
+ *
+ * Every league function needs the row — for its `season` and its rule-set — and
+ * every one of them has already passed `requireMembership`, so a missing league
+ * here is not a lookup failure but an impossibility. It refuses as `NotMember`
+ * rather than throwing something new, because from outside there is no
+ * difference between a league that never existed and one the caller is not in,
+ * and the refusal should not teach them which.
+ */
+export async function leagueOf(
+  ctx: QueryCtx,
+  leagueId: Id<"leagues">,
+): Promise<Doc<"leagues">> {
+  const league = await ctx.db.get(leagueId);
+  if (league === null) {
+    throw refusal("NotMember");
+  }
+  return league;
+}
+
+/**
  * The caller's own active **commissioner** membership in this league.
  *
  * Rule 3 layered on rule 2: the role is read off the caller's row in *this*

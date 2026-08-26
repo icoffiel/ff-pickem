@@ -9,6 +9,7 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as board from "../board.js";
 import type * as config from "../config.js";
 import type * as crons from "../crons.js";
 import type * as emailTransport from "../emailTransport.js";
@@ -19,8 +20,10 @@ import type * as http from "../http.js";
 import type * as inviteEmail from "../inviteEmail.js";
 import type * as invites from "../invites.js";
 import type * as leagues from "../leagues.js";
+import type * as membership from "../membership.js";
 import type * as nflverse from "../nflverse.js";
 import type * as picks from "../picks.js";
+import type * as standings from "../standings.js";
 import type * as sync from "../sync.js";
 import type * as users from "../users.js";
 import type * as week from "../week.js";
@@ -33,6 +36,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  board: typeof board;
   config: typeof config;
   crons: typeof crons;
   emailTransport: typeof emailTransport;
@@ -43,8 +47,10 @@ declare const fullApi: ApiFromModules<{
   inviteEmail: typeof inviteEmail;
   invites: typeof invites;
   leagues: typeof leagues;
+  membership: typeof membership;
   nflverse: typeof nflverse;
   picks: typeof picks;
+  standings: typeof standings;
   sync: typeof sync;
   users: typeof users;
   week: typeof week;
